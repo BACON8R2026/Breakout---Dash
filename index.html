@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Breakout AI Solutions Dashboard Shell</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #060913; --panel: #0d1424; --panel-2: #111b30; --line: rgba(255,255,255,0.08);
+  --text: #edf2fb; --muted: #8ea2c2; --blue: #3b82f6; --blue-2: #60a5fa; --green: #34d399;
+  --glow: rgba(59,130,246,0.18);
+}
+body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; overflow-x: hidden; }
+body::before {
+  content: ''; position: fixed; inset: 0;
+  background-image: linear-gradient(rgba(59,130,246,0.035) 1px, transparent 1px), linear-gradient(90deg, rgba(59,130,246,0.035) 1px, transparent 1px);
+  background-size: 44px 44px; pointer-events: none;
+}
+.topnav { position: sticky; top: 0; z-index: 50; backdrop-filter: blur(14px); background: rgba(6,9,19,0.9); border-bottom: 1px solid var(--line); }
+.topnav-inner { display: flex; align-items: center; gap: 18px; padding: 14px 18px; }
+.brand { display: flex; align-items: center; gap: 12px; min-width: max-content; }
+.brand-logo { width: 42px; height: 42px; border-radius: 10px; background: rgba(255,255,255,0.04); border: 1px solid var(--line); overflow: hidden; display: flex; align-items: center; justify-content: center; }
+.brand-logo img { width: 100%; height: 100%; object-fit: cover; }
+.brand-text h1 { font-family: 'Syne', sans-serif; font-size: 15px; font-weight: 800; letter-spacing: -0.4px; }
+.brand-text p { font-size: 11px; color: var(--muted); }
+.nav-tabs { display: flex; gap: 8px; overflow-x: auto; flex: 1; scrollbar-width: none; }
+.nav-tabs::-webkit-scrollbar { display: none; }
+.nav-tab { border: 1px solid transparent; background: transparent; color: var(--muted); padding: 10px 14px; border-radius: 10px; cursor: pointer; white-space: nowrap; font-size: 13px; transition: 0.18s ease; }
+.nav-tab:hover { color: var(--text); background: rgba(255,255,255,0.03); }
+.nav-tab.active { color: var(--blue-2); border-color: rgba(59,130,246,0.32); background: var(--glow); }
+.topnav-status { display: flex; align-items: center; gap: 8px; min-width: max-content; font-size: 12px; color: var(--green); }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); box-shadow: 0 0 10px var(--green); }
+.main { max-width: 1180px; margin: 0 auto; padding: 28px 18px 70px; }
+.hero { text-align: center; margin-bottom: 22px; }
+.hero h2 { font-family: 'Syne', sans-serif; font-size: 48px; line-height: 1.03; letter-spacing: -1.4px; margin-bottom: 10px; }
+.hero h2 span { background: linear-gradient(90deg, var(--blue-2), #b9d6ff); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+.hero p { color: var(--muted); font-size: 15px; max-width: 780px; margin: 0 auto; }
+.client-ribbon { display: flex; justify-content: center; margin: 18px 0 22px; }
+.client-badge { display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 999px; border: 1px solid rgba(59,130,246,0.32); background: rgba(59,130,246,0.13); color: var(--blue-2); font-size: 13px; }
+.roi-bar { display: grid; grid-template-columns: repeat(4, 1fr); background: var(--panel); border: 1px solid rgba(59,130,246,0.25); border-radius: 18px; overflow: hidden; margin-bottom: 26px; }
+.roi-item { padding: 20px 14px; text-align: center; position: relative; }
+.roi-item:not(:last-child)::after { content: ''; position: absolute; right: 0; top: 18px; bottom: 18px; width: 1px; background: var(--line); }
+.roi-value { font-family: 'Syne', sans-serif; font-size: 32px; letter-spacing: -1px; color: var(--blue-2); }
+.roi-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.6px; margin-top: 6px; }
+.station-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+.station-card { background: linear-gradient(180deg, rgba(17,27,48,0.96), rgba(13,20,36,0.98)); border: 1px solid var(--line); border-radius: 16px; padding: 18px; cursor: pointer; transition: 0.18s ease; }
+.station-card:hover { transform: translateY(-2px); border-color: rgba(59,130,246,0.28); box-shadow: 0 14px 40px rgba(0,0,0,0.25); }
+.station-icon { font-size: 22px; margin-bottom: 12px; }
+.station-title { font-family: 'Syne', sans-serif; font-size: 16px; margin-bottom: 6px; }
+.station-desc { font-size: 13px; line-height: 1.5; color: var(--muted); margin-bottom: 14px; }
+.station-badge { display: inline-flex; padding: 5px 9px; border-radius: 999px; font-size: 10px; letter-spacing: 1px; text-transform: uppercase; font-weight: 700; color: var(--blue-2); border: 1px solid rgba(59,130,246,0.32); background: rgba(59,130,246,0.12); }
+.panel { display: none; margin-top: 26px; background: var(--panel); border: 1px solid var(--line); border-radius: 20px; overflow: hidden; }
+.panel.active { display: block; }
+.panel-head { padding: 24px 24px 18px; border-bottom: 1px solid var(--line); }
+.panel-kicker { font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: var(--blue-2); margin-bottom: 8px; font-weight: 700; }
+.panel-title { font-family: 'Syne', sans-serif; font-size: 34px; line-height: 1.08; letter-spacing: -1px; }
+.panel-title span { color: var(--blue-2); }
+.panel-copy { margin-top: 10px; color: var(--muted); font-size: 14px; max-width: 760px; line-height: 1.6; }
+.panel-body { padding: 22px 24px 24px; }
+.shell-grid { display: grid; grid-template-columns: 1.15fr 0.85fr; gap: 18px; }
+.shell-block { background: var(--panel-2); border: 1px solid var(--line); border-radius: 16px; padding: 18px; }
+.shell-block h4 { font-family: 'Syne', sans-serif; font-size: 16px; margin-bottom: 10px; }
+.shell-list { display: grid; gap: 10px; }
+.shell-list div { padding: 12px 13px; background: rgba(255,255,255,0.02); border: 1px solid var(--line); border-radius: 12px; color: var(--muted); font-size: 13px; line-height: 1.45; }
+.placeholder-box { min-height: 320px; display: grid; place-items: center; text-align: center; border: 1px dashed rgba(255,255,255,0.14); border-radius: 16px; color: var(--muted); padding: 20px; }
+.footer-note { margin-top: 18px; color: var(--muted); font-size: 13px; text-align: center; }
+@media (max-width: 960px) { .station-grid { grid-template-columns: repeat(2, 1fr); } .shell-grid { grid-template-columns: 1fr; } .roi-bar { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 640px) { .hero h2 { font-size: 36px; } .station-grid { grid-template-columns: 1fr; } .roi-bar { grid-template-columns: 1fr; } .topnav-inner { flex-wrap: wrap; } }
+</style>
+</head>
+<body>
+<div class="topnav">
+  <div class="topnav-inner">
+    <div class="brand">
+      <div class="brand-logo"><img src="https://dummyimage.com/84x84/0d1424/ffffff.png&text=BA" alt="Breakout AI Solutions logo"></div>
+      <div class="brand-text">
+        <h1>Breakout AI Solutions</h1>
+        <p>Real dashboard shell</p>
+      </div>
+    </div>
+    <div class="nav-tabs">
+      <button class="nav-tab active" data-panel="overview">Overview</button>
+      <button class="nav-tab" data-panel="find-leads">Find Leads</button>
+      <button class="nav-tab" data-panel="seo-aeo">SEO + AEO</button>
+      <button class="nav-tab" data-panel="smart-crm">Smart CRM</button>
+      <button class="nav-tab" data-panel="phone-agent">Phone Agent</button>
+      <button class="nav-tab" data-panel="proposals">Proposals</button>
+      <button class="nav-tab" data-panel="contracts">Contracts</button>
+      <button class="nav-tab" data-panel="invoicing">Invoicing</button>
+      <button class="nav-tab" data-panel="follow-up-sms">Follow-Up SMS</button>
+      <button class="nav-tab" data-panel="social-media">Social Media</button>
+      <button class="nav-tab" data-panel="ad-campaigns">Ad Campaigns</button>
+      <button class="nav-tab" data-panel="newsletter">Newsletter</button>
+      <button class="nav-tab" data-panel="dashboard">Dashboard</button>
+    </div>
+    <div class="topnav-status"><span class="dot"></span><span>AI Online</span></div>
+  </div>
+</div>
+
+<main class="main">
+  <section class="hero">
+    <h2>Your business runs on <span>Autopilot.</span></h2>
+    <p>This is the real Breakout shell. All stations are installed as a working front end foundation. We can wire each station into live tools one by one.</p>
+  </section>
+
+  <div class="client-ribbon">
+    <div class="client-badge"><span class="dot"></span><span>Breakout internal ops build</span></div>
+  </div>
+
+  <section class="roi-bar">
+    <div class="roi-item"><div class="roi-value">0</div><div class="roi-label">hrs saved / month</div></div>
+    <div class="roi-item"><div class="roi-value">$0</div><div class="roi-label">saved / month</div></div>
+    <div class="roi-item"><div class="roi-value">0</div><div class="roi-label">hrs saved / year</div></div>
+    <div class="roi-item"><div class="roi-value">$0</div><div class="roi-label">saved / year</div></div>
+  </section>
+
+  <section class="station-grid">
+    <div class="station-card" data-panel="find-leads"><div class="station-icon">ð¯</div><div class="station-title">Find Leads</div><div class="station-desc">Scraping, enrichment, scoring, and CRM push.</div><div class="station-badge">shell ready</div></div>
+    <div class="station-card" data-panel="seo-aeo"><div class="station-icon">ð</div><div class="station-title">SEO + AEO</div><div class="station-desc">Keywords, city pages, answer blocks, and metadata.</div><div class="station-badge">shell ready</div></div>
+    <div class="station-card" data-panel="smart-crm"><div class="station-icon">ð§</div><div class="station-title">Smart CRM</div><div class="station-desc">Email and text logic tied to your pipeline.</div><div class="station-badge">shell ready</div></div>
+    <div class="station-card" data-panel="phone-agent"><div class="station-icon">ð</div><div class="station-title">Phone Agent</div><div class="station-desc">AI call flows, transfer logic, and logging.</div><div class="station-badge">shell ready</div></div>
+    <div class="station-card" data-panel="proposals"><div class="station-icon">ð</div><div class="station-title">Proposals</div><div class="station-desc">Notes to scope, pricing, and send-ready proposal.</div><div class="station-badge">shell ready</div></div>
+    <div class="station-card" data-panel="contracts"><div class="station-icon">âï¸</div><div class="station-title">Contracts</div><div class="station-desc">Generate contracts and track signatures.</div><div class="station-badge">shell ready</div></div>
+    <div class="station-card" data-panel="invoicing"><div class="station-icon">ð°</div><div class="station-title">Invoicing</div><div class="station-desc">Invoices, payment state, and reminders.</div><div class="station-badge">shell ready</div></div>
+    <div class="station-card" data-panel="follow-up-sms"><div class="station-icon">ð¬</div><div class="station-title">Follow-Up SMS</div><div class="station-desc">Sequence logic and reply management.</div><div class="station-badge">shell ready</div></div>
+    <div class="station-card" data-panel="social-media"><div class="station-icon">ð±</div><div class="station-title">Social Media</div><div class="station-desc">Content planning, approvals, and publishing queue.</div><div class="station-badge">shell ready</div></div>
+    <div class="station-card" data-panel="ad-campaigns"><div class="station-icon">ð£</div><div class="station-title">Ad Campaigns</div><div class="station-desc">Budgets, audiences, hooks, and campaign builder.</div><div class="station-badge">shell ready</div></div>
+    <div class="station-card" data-panel="newsletter"><div class="station-icon">âï¸</div><div class="station-title">Newsletter</div><div class="station-desc">Draft, preview, segment, and schedule sends.</div><div class="station-badge">shell ready</div></div>
+    <div class="station-card" data-panel="dashboard"><div class="station-icon">ð</div><div class="station-title">Dashboard</div><div class="station-desc">Executive KPI view and activity feed.</div><div class="station-badge">shell ready</div></div>
+  </section>
+
+  <section class="panel active" id="panel-overview">
+    <div class="panel-head">
+      <div class="panel-kicker">overview</div>
+      <div class="panel-title">Your <span>Breakout shell</span> is ready.</div>
+      <div class="panel-copy">This is the base to turn the presentation demo into your real operating dashboard.</div>
+    </div>
+    <div class="panel-body">
+      <div class="shell-grid">
+        <div class="shell-block">
+          <h4>Already installed</h4>
+          <div class="shell-list">
+            <div>Responsive top rail and station switching</div>
+            <div>Hero and ROI bar</div>
+            <div>12 station cards and 12 panel shells</div>
+            <div>Shared design system</div>
+            <div>Front end navigation logic for Replit or GitHub Pages</div>
+          </div>
+        </div>
+        <div class="shell-block">
+          <h4>Suggested first build order</h4>
+          <div class="shell-list">
+            <div>1. Find Leads</div>
+            <div>2. Smart CRM</div>
+            <div>3. Proposals</div>
+            <div>4. Follow-Up SMS</div>
+            <div>5. Dashboard KPI rollup</div>
+          </div>
+        </div>
+      </div>
+      <div class="footer-note">Pick the first station and we wire the real logic behind it.</div>
+    </div>
+  </section>
+
+  <section class="panel" id="panel-find-leads"><div class="panel-head"><div class="panel-kicker">station 1</div><div class="panel-title">Find Leads <span>shell</span></div><div class="panel-copy">Google and Yelp scraping, enrichment, dedupe, scoring, and CRM push will go here.</div></div><div class="panel-body"><div class="placeholder-box">Lead sourcing workspace</div></div></section>
+  <section class="panel" id="panel-seo-aeo"><div class="panel-head"><div class="panel-kicker">station 2</div><div class="panel-title">SEO + AEO <span>shell</span></div><div class="panel-copy">Keywords, city pages, metadata, and answer engine blocks will go here.</div></div><div class="panel-body"><div class="placeholder-box">SEO workspace</div></div></section>
+  <section class="panel" id="panel-smart-crm"><div class="panel-head"><div class="panel-kicker">station 3</div><div class="panel-title">Smart CRM <span>shell</span></div><div class="panel-copy">Email and text generation tied to pipeline events will go here.</div></div><div class="panel-body"><div class="placeholder-box">CRM messaging workspace</div></div></section>
+  <section class="panel" id="panel-phone-agent"><div class="panel-head"><div class="panel-kicker">station 4</div><div class="panel-title">Phone Agent <span>shell</span></div><div class="panel-copy">Voice flows, transfers, and call logs will go here.</div></div><div class="panel-body"><div class="placeholder-box">Phone agent console</div></div></section>
+  <section class="panel" id="panel-proposals"><div class="panel-head"><div class="panel-kicker">station 5</div><div class="panel-title">Proposals <span>shell</span></div><div class="panel-copy">Notes to proposal output will go here.</div></div><div class="panel-body"><div class="placeholder-box">Proposal builder</div></div></section>
+  <section class="panel" id="panel-contracts"><div class="panel-head"><div class="panel-kicker">station 6</div><div class="panel-title">Contracts <span>shell</span></div><div class="panel-copy">Contract generation and signature tracking will go here.</div></div><div class="panel-body"><div class="placeholder-box">Contract workflow</div></div></section>
+  <section class="panel" id="panel-invoicing"><div class="panel-head"><div class="panel-kicker">station 7</div><div class="panel-title">Invoicing <span>shell</span></div><div class="panel-copy">Invoice creation and reminders will go here.</div></div><div class="panel-body"><div class="placeholder-box">Invoice queue</div></div></section>
+  <section class="panel" id="panel-follow-up-sms"><div class="panel-head"><div class="panel-kicker">station 8</div><div class="panel-title">Follow-Up SMS <span>shell</span></div><div class="panel-copy">Sequences and text reply flow will go here.</div></div><div class="panel-body"><div class="placeholder-box">SMS sequence builder</div></div></section>
+  <section class="panel" id="panel-social-media"><div class="panel-head"><div class="panel-kicker">station 9</div><div class="panel-title">Social Media <span>shell</span></div><div class="panel-copy">Planning, approvals, and content queue will go here.</div></div><div class="panel-body"><div class="placeholder-box">Social calendar</div></div></section>
+  <section class="panel" id="panel-ad-campaigns"><div class="panel-head"><div class="panel-kicker">station 10</div><div class="panel-title">Ad Campaigns <span>shell</span></div><div class="panel-copy">Campaign builder and ad management shell goes here.</div></div><div class="panel-body"><div class="placeholder-box">Ad campaign builder</div></div></section>
+  <section class="panel" id="panel-newsletter"><div class="panel-head"><div class="panel-kicker">station 11</div><div class="panel-title">Newsletter <span>shell</span></div><div class="panel-copy">Drafts, previews, and send scheduling go here.</div></div><div class="panel-body"><div class="placeholder-box">Newsletter composer</div></div></section>
+  <section class="panel" id="panel-dashboard"><div class="panel-head"><div class="panel-kicker">station 12</div><div class="panel-title">Dashboard <span>shell</span></div><div class="panel-copy">Executive KPI view and activity feed go here.</div></div><div class="panel-body"><div class="placeholder-box">Master dashboard</div></div></section>
+</main>
+
+<script>
+const tabs = document.querySelectorAll('.nav-tab');
+const cards = document.querySelectorAll('.station-card');
+const panels = document.querySelectorAll('.panel');
+
+function showPanel(panelId) {
+  tabs.forEach(tab => tab.classList.toggle('active', tab.dataset.panel === panelId));
+  panels.forEach(panel => panel.classList.toggle('active', panel.id === 'panel-' + panelId));
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+tabs.forEach(tab => tab.addEventListener('click', () => showPanel(tab.dataset.panel)));
+cards.forEach(card => card.addEventListener('click', () => showPanel(card.dataset.panel)));
+</script>
+</body>
+</html>
