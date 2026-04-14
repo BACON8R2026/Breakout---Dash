@@ -105,12 +105,14 @@ body::before { content: ''; position: fixed; inset: 0; background-image: linear-
 .ltbl td { font-size: 12px; color: #8fa3c0; padding: 14px; border-bottom: 1px solid rgba(255,255,255,0.05); vertical-align: top; background: rgba(10,16,28,0.92); }
 .ltbl tr:last-child td { border-bottom: none; }
 .ltbl tr:hover td { background: rgba(22,30,48,0.96); }
-.ltbl th:nth-child(1), .ltbl td:nth-child(1) { width: 25%; }
+.ltbl th:nth-child(1), .ltbl td:nth-child(1) { width: 22%; }
 .ltbl th:nth-child(2), .ltbl td:nth-child(2) { width: 12%; }
-.ltbl th:nth-child(3), .ltbl td:nth-child(3) { width: 18%; }
-.ltbl th:nth-child(4), .ltbl td:nth-child(4) { width: 18%; }
-.ltbl th:nth-child(5), .ltbl td:nth-child(5) { width: 17%; }
-.ltbl th:nth-child(6), .ltbl td:nth-child(6) { width: 10%; }
+.ltbl th:nth-child(3), .ltbl td:nth-child(3) { width: 14%; }
+.ltbl th:nth-child(4), .ltbl td:nth-child(4) { width: 10%; }
+.ltbl th:nth-child(5), .ltbl td:nth-child(5) { width: 9%; }
+.ltbl th:nth-child(6), .ltbl td:nth-child(6) { width: 15%; }
+.ltbl th:nth-child(7), .ltbl td:nth-child(7) { width: 10%; }
+.ltbl th:nth-child(8), .ltbl td:nth-child(8) { width: 8%; }
 .lname { font-weight: 700; color: #e8edf5; line-height: 1.4; display:block; }
 .lcity { color: #e8edf5; font-weight: 600; display:block; }
 .lsub { display: block; margin-top: 4px; font-size: 10px; color: #4a6080; line-height: 1.45; }
@@ -568,7 +570,7 @@ function normalizeLeadResult(item) {
   var website = pickPresent(item.website, item.websiteUri, company.website, '');
   var city = pickPresent(item.city, company.city, '');
   var state = pickPresent(item.state, company.state, '');
-  var employees = pickPresent(item.employees, company.employees, '');
+  var employees = pickPresent(item.employees, item.employeeCount, item.employee_count, company.employees, company.employeeCount, company.employee_count, company.employee_count_range, '');
   var industry = pickPresent(item.industry, company.industry, '');
   return Object.assign({}, item, {
     _apolloCompany: company,
@@ -632,6 +634,12 @@ function chooseWebsite(lead) {
   return String((lead && (lead.website || lead.websiteUri || (lead._apolloCompany && lead._apolloCompany.website))) || '').trim();
 }
 
+function chooseEmployees(lead) {
+  if (!lead) return '';
+  var company = lead._apolloCompany || lead.company || {};
+  return pickPresent(lead.employees, lead.employeeCount, lead.employee_count, company.employees, company.employeeCount, company.employee_count, company.employee_count_range, '');
+}
+
 
 async function hydrateLeadsWithApollo(arr) {
   if (!Array.isArray(arr) || !arr.length) return;
@@ -669,7 +677,7 @@ function drawLeads(arr) {
       var cityState = getCityState(ad, l);
       var ph = choosePhone(l);
       var company = l._apolloCompany || l.company || {};
-      var employees = pickPresent(l.employees, company.employees, '');
+      var employees = chooseEmployees(l);
       var industry = resolveIndustry(l);
       var email = chooseEmail(l);
       var website = chooseWebsite(l);
@@ -683,7 +691,7 @@ function drawLeads(arr) {
       var locationBlock = '<div class="cellstack"><span class="lcity">' + esc(cityState.city || '') + '</span>' + (cityState.state ? '<span class="lsub">' + esc(cityState.state) + '</span>' : '') + '</div>';
       var phoneBlock = ph ? '<span class="lphone">' + esc(ph) + '</span>' : '<span class="lmuted">Not found</span>';
       var industryBlock = '<span class="lcontact">' + esc(industry) + '</span>';
-      var employeesBlock = String(employees) !== '' ? '<span class="lcontact">' + esc(String(employees)) + '</span>' : '<span class="lmuted">Not found</span>';
+      var employeesBlock = (String(employees) !== '' && String(employees).toLowerCase() !== 'not found') ? '<span class="lcontact">' + esc(String(employees)) + '</span>' : '<span class="lmuted">Not found</span>';
       var emailBlock = email ? '<span class="emailtxt">' + esc(email) + '</span>' : '<span class="lmuted">Not found</span>';
       var websiteBlock = website ? '<a class="llink" href="' + esc(website) + '" target="_blank" rel="noopener">Visit site &#8599;</a>' : '<span class="lmuted">Not found</span>';
       var crmBlock = ic ? '<span class="incrm">In CRM</span>' : '<button class="bsm ora" onclick="openImp(' + i + ')">Add</button>';
@@ -704,7 +712,7 @@ function drawLeads(arr) {
   var hot = arr.filter(function(x){ return (x.rating || 0) >= 4.5; }).length;
   var phs = arr.filter(function(x){ return !!choosePhone(x); }).length;
   var emails = arr.filter(function(x){ return !!chooseEmail(x); }).length;
-  var emps = arr.filter(function(x){ return String(pickPresent(x.employees, x._apolloCompany && x._apolloCompany.employees, '')) !== ''; }).length;
+  var emps = arr.filter(function(x){ return String(chooseEmployees(x)) !== ''; }).length;
   setText('ls-tot', arr.length);
   setText('ls-hot', hot);
   setText('ls-ph', phs);
@@ -733,7 +741,7 @@ function doCSV() {
       cityState.state || '',
       choosePhone(l),
       resolveIndustry(l),
-      pickPresent(l.employees, l._apolloCompany && l._apolloCompany.employees, ''),
+      chooseEmployees(l),
       chooseEmail(l),
       chooseWebsite(l)
     ]);
