@@ -362,8 +362,6 @@ body::before { content: ''; position: fixed; inset: 0; background-image: linear-
     <div class="outhdr">
       <div class="outmeta">
         <span><strong id="ls-cnt">0 results</strong></span>
-        <span id="ls-meta-city">Phone and email enrichment active</span>
-        <span id="ls-meta-apollo">Website and company enrichment live</span>
       </div>
       <div class="outacts">
         <button class="bsm ok" onclick="bulkAdd()">+ Import All</button>
@@ -523,13 +521,11 @@ function runSearch() {
   var c = document.getElementById('ls-c').value.trim();
   var radius = (document.getElementById('ls-radius') || {}).value || '';
   var r = document.getElementById('ls-r').value;
-  var radius = (document.getElementById('ls-radius') || {}).value || '';
   if (!q || !c) { showErr('ls-eb', 'Enter a business type and city.'); return; }
   hideEl('ls-eb'); hideEl('ls-out'); hideEl('ls-sv');
   document.getElementById('ls-btn').disabled = true;
   showEl('ls-sb');
   setText('ls-st', 'Running full lead enrichment...');
-  setText('ls-ap', '0');
   setText('ls-em', '0');
   var msgs = [
     'Searching Google Places...',
@@ -664,14 +660,43 @@ function resolveIndustry(lead) {
   return searchType || 'Unknown';
 }
 
+
+function sortLeads(arr) {
+  return (arr || []).map(function(item, idx) {
+    if (item && typeof item === 'object' && typeof item._origIndex === 'undefined') item._origIndex = idx;
+    return item;
+  }).slice().sort(function(a, b) {
+    var aEmail = chooseEmail(a) ? 1 : 0;
+    var bEmail = chooseEmail(b) ? 1 : 0;
+    if (bEmail !== aEmail) return bEmail - aEmail;
+
+    var aEmp = parseInt(String(chooseEmployees(a) || '').replace(/[^0-9]/g, ''), 10);
+    var bEmp = parseInt(String(chooseEmployees(b) || '').replace(/[^0-9]/g, ''), 10);
+    aEmp = isNaN(aEmp) ? -1 : aEmp;
+    bEmp = isNaN(bEmp) ? -1 : bEmp;
+    if (bEmp !== aEmp) return bEmp - aEmp;
+
+    var aRating = Number(a && a.rating ? a.rating : 0);
+    var bRating = Number(b && b.rating ? b.rating : 0);
+    if (bRating !== aRating) return bRating - aRating;
+
+    var aName = String((a && (a.name || a.displayName)) || '').toLowerCase();
+    var bName = String((b && (b.name || b.displayName)) || '').toLowerCase();
+    if (aName < bName) return -1;
+    if (aName > bName) return 1;
+    return 0;
+  });
+}
+
 function drawLeads(arr) {
   var tb = document.getElementById('ls-body');
   tb.innerHTML = '';
-  if (!arr.length) {
+  var sorted = sortLeads(arr || []);
+  if (!sorted.length) {
     tb.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:28px;color:#4a6080">No results found.</td></tr>';
   } else {
-    for (var i = 0; i < arr.length; i++) {
-      var l = arr[i];
+    for (var i = 0; i < sorted.length; i++) {
+      var l = sorted[i];
       var nm = l.name || l.displayName || '';
       var ad = l.address || l.formatted_address || l.formattedAddress || l.vicinity || '';
       var cityState = getCityState(ad, l);
@@ -694,7 +719,8 @@ function drawLeads(arr) {
       var employeesBlock = (String(employees) !== '' && String(employees).toLowerCase() !== 'not found') ? '<span class="lcontact">' + esc(String(employees)) + '</span>' : '<span class="lmuted">Not found</span>';
       var emailBlock = email ? '<span class="emailtxt">' + esc(email) + '</span>' : '<span class="lmuted">Not found</span>';
       var websiteBlock = website ? '<a class="llink" href="' + esc(website) + '" target="_blank" rel="noopener">Visit site &#8599;</a>' : '<span class="lmuted">Not found</span>';
-      var crmBlock = ic ? '<span class="incrm">In CRM</span>' : '<button class="bsm ora" onclick="openImp(' + i + ')">Add</button>';
+      var leadIndex = typeof l._origIndex === 'number' ? l._origIndex : i;
+      var crmBlock = ic ? '<span class="incrm">In CRM</span>' : '<button class="bsm ora" onclick="openImp(' + leadIndex + ')">Add</button>';
 
       tr.innerHTML =
         '<td>' + nameBlock + '</td>' +
@@ -720,8 +746,6 @@ function drawLeads(arr) {
   setText('ls-emp', emps);
   showElFlex('ls-sv');
   setText('ls-cnt', arr.length + ' results');
-  setText('ls-meta-city', phs + ' rows with company phone');
-  setText('ls-meta-apollo', emails + ' rows with public email found');
   showEl('ls-out');
   try { document.getElementById('ls-out').scrollIntoView({ behavior:'smooth', block:'nearest' }); } catch(e) {}
 }
