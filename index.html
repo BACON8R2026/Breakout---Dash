@@ -350,9 +350,9 @@ body::before { content: ''; position: fixed; inset: 0; background-image: linear-
     <div class="svdiv"></div>
     <div class="svstat"><div class="svnum" id="ls-ph">0</div><div class="svlbl">Company Phone</div></div>
     <div class="svdiv"></div>
-    <div class="svstat"><div class="svnum" id="ls-em">0</div><div class="svlbl">Cities</div></div>
+    <div class="svstat"><div class="svnum" id="ls-em">0</div><div class="svlbl">Emails</div></div>
     <div class="svdiv"></div>
-    <div class="svstat"><div class="svnum" id="ls-ap">0</div><div class="svlbl">Apollo Loaded</div></div>
+    <div class="svstat"><div class="svnum" id="ls-ap">0</div><div class="svlbl">Cities</div></div>
   </div>
   <div class="outcard" id="ls-out">
     <div class="outhdr">
@@ -360,8 +360,8 @@ body::before { content: ''; position: fixed; inset: 0; background-image: linear-
         <div class="outtitle">Live Results</div>
         <div class="outmeta">
           <span><strong id="ls-cnt">0 results</strong></span>
-          <span id="ls-meta-city">City and state will be split cleanly</span>
-          <span id="ls-meta-apollo">Apollo company enrichment ready</span>
+          <span id="ls-meta-city">City and state will be filled when available</span>
+          <span id="ls-meta-apollo">Website and company enrichment live</span>
         </div>
       </div>
       <div class="outacts">
@@ -518,29 +518,29 @@ function runSearch() {
   hideEl('ls-eb'); hideEl('ls-out'); hideEl('ls-sv');
   document.getElementById('ls-btn').disabled = true;
   showEl('ls-sb');
-  setText('ls-st', 'Connecting to Google Places...');
+  setText('ls-st', 'Running full lead enrichment...');
   setText('ls-ap', '0');
   setText('ls-em', '0');
-  var msgs = ['Connecting to Google Places...', 'Searching ' + q + ' in ' + c + '...', 'Splitting city and state...', 'Loading Apollo company details...', 'Almost done...'];
+  var msgs = [
+    'Searching Google Places...',
+    'Loading Apollo company details...',
+    'Checking websites for missing email and phone...',
+    'Formatting results...',
+    'Almost done...'
+  ];
   var mi = 0;
-  var iv = setInterval(function() { if (mi < msgs.length) { document.getElementById('ls-st').textContent = msgs[mi++]; } }, 700);
-  var url = API + '/api/places/search?query=' + encodeURIComponent(q + ' ' + c);
+  var iv = setInterval(function() { if (mi < msgs.length) { document.getElementById('ls-st').textContent = msgs[mi++]; } }, 800);
+  var url = API + '/api/leads/search?query=' + encodeURIComponent(q + ' ' + c);
   if (r) url += '&minRating=' + r;
   fetch(url)
     .then(function(res) { if (!res.ok) throw new Error('API ' + res.status); return res.json(); })
     .then(function(data) {
       clearInterval(iv); hideEl('ls-sb');
       document.getElementById('ls-btn').disabled = false;
-      var results = data.results || data || [];
+      var results = data.results || data.leads || data || [];
       if (!Array.isArray(results)) results = [];
-      leads = results.map(function(item){
-        item._apolloCompany = null;
-        item._apolloLoaded = false;
-        item._apolloError = '';
-        return item;
-      });
+      leads = results.map(normalizeLeadResult);
       drawLeads(leads);
-      hydrateLeadsWithApollo(leads);
     })
     .catch(function(err) {
       clearInterval(iv); hideEl('ls-sb');
@@ -549,10 +549,40 @@ function runSearch() {
     });
 }
 
+
+
+function normalizeLeadResult(item) {
+  item = item || {};
+  var company = item.company || item._apolloCompany || {};
+  var email = item.email || item.bestEmail || company.email || '';
+  var phone = item.phone || item.bestPhone || company.phone || item.formatted_phone_number || item.nationalPhoneNumber || item.internationalPhoneNumber || '';
+  var website = item.website || item.websiteUri || company.website || '';
+  var city = item.city || company.city || '';
+  var state = item.state || company.state || '';
+  return Object.assign({}, item, {
+    _apolloCompany: company,
+    _apolloLoaded: item._apolloLoaded !== false,
+    email: email,
+    phone: phone,
+    website: website,
+    city: city,
+    state: state,
+    employees: item.employees || company.employees || '',
+    industry: item.industry || company.industry || '',
+    _siteChecked: !!(item.pagesChecked || item.bestEmail || item.bestPhone),
+    _sourceFlags: {
+      apollo: !!(company && (company.phone || company.city || company.state || company.website || company.employees || company.industry)),
+      website: !!(item.bestEmail || item.bestPhone || item.pagesChecked)
+    }
+  });
+}
 function inCRM(name) { for (var i = 0; i < crm.length; i++) { if (crm[i].biz === name) return true; } return false; }
 
 function getCityState(address, lead) {
   var company = lead && lead._apolloCompany ? lead._apolloCompany : null;
+  if (lead && (lead.city || lead.state)) {
+    return { city: lead.city || '', state: lead.state || '' };
+  }
   if (company && (company.city || company.state)) {
     return { city: company.city || '', state: company.state || '' };
   }
@@ -578,6 +608,19 @@ function compactPhone(v) {
   var s = String(v || '').trim();
   return s && s !== 'N/A' ? s : '';
 }
+
+function chooseEmail(lead) {
+  return String((lead && (lead.email || lead.bestEmail || (lead._apolloCompany && lead._apolloCompany.email))) || '').trim();
+}
+
+function choosePhone(lead) {
+  return compactPhone((lead && (lead.phone || lead.bestPhone || (lead._apolloCompany && lead._apolloCompany.phone) || lead.formatted_phone_number || lead.nationalPhoneNumber || lead.internationalPhoneNumber)) || '');
+}
+
+function chooseWebsite(lead) {
+  return String((lead && (lead.website || lead.websiteUri || (lead._apolloCompany && lead._apolloCompany.website))) || '').trim();
+}
+
 
 async function hydrateLeadsWithApollo(arr) {
   if (!Array.isArray(arr) || !arr.length) return;
@@ -606,14 +649,17 @@ function drawLeads(arr) {
       var l = arr[i];
       var nm = l.name || l.displayName || '';
       var ad = l.address || l.formatted_address || l.formattedAddress || l.vicinity || '';
-      var company = l._apolloCompany || {};
+      var company = l._apolloCompany || l.company || {};
       var cityState = getCityState(ad, l);
-      var ph = compactPhone(l.phone || l.formatted_phone_number || l.nationalPhoneNumber || l.internationalPhoneNumber || company.phone || '');
-      var wb = company.website || l.website || l.websiteUri || '';
+      var ph = choosePhone(l);
+      var wb = chooseWebsite(l);
       var rt = l.rating || '';
       var ic = inCRM(nm);
-      var employees = company.employees || '';
-      var industry = company.industry || '';
+      var employees = l.employees || company.employees || '';
+      var industry = l.industry || company.industry || '';
+      var email = chooseEmail(l);
+      var sourceApollo = l._sourceFlags && l._sourceFlags.apollo;
+      var sourceSite = l._sourceFlags && l._sourceFlags.website;
       var tr = document.createElement('tr');
       tr.className = 'lrow-new';
       tr.style.animationDelay = (i * 35) + 'ms';
@@ -634,7 +680,7 @@ function drawLeads(arr) {
         '<div class="cellstack">' +
           '<div class="cellline">' + (ph ? '<span class="lphone">' + esc(ph) + '</span>' : '<span class="lmuted">Phone not found</span>') + '</div>' +
           '<div class="cellline">' + (wb ? '<a class="llink" href="' + esc(wb) + '" target="_blank" rel="noopener">Website â</a>' : '<span class="lmuted">Website not found</span>') + '</div>' +
-          '<div class="cellline">' + (rt ? '<span class="rchip">â ' + esc(String(rt)) + '</span>' : '<span class="mini-chip">No rating</span>') + (l._apolloLoaded ? '<span class="mini-chip apollo-pill">Apollo ready</span>' : '<span class="mini-chip">Loading Apollo</span>') + '</div>' +
+          '<div class="cellline">' + (rt ? '<span class="rchip">â ' + esc(String(rt)) + '</span>' : '<span class="mini-chip">No rating</span>') + (sourceApollo ? '<span class="mini-chip apollo-pill">Apollo</span>' : '') + (sourceSite ? '<span class="mini-chip">Website scrape</span>' : '') + '</div>' +
         '</div>';
 
       var industryBlock =
@@ -645,8 +691,8 @@ function drawLeads(arr) {
 
       var emailBlock =
         '<div class="cellstack">' +
-          '<span class="emailtxt">Email requires paid Apollo people plan</span>' +
-          '<span class="lsub">Company enrichment is live now</span>' +
+          (email ? '<span class="emailtxt">' + esc(email) + '</span>' : '<span class="lmuted">Email not found</span>') +
+          '<span class="lsub">' + esc(email ? (sourceSite ? 'Found on website' : 'Loaded from enrichment') : 'Public email not available') + '</span>' +
         '</div>';
 
       tr.innerHTML =
@@ -661,20 +707,22 @@ function drawLeads(arr) {
   }
 
   var hot = arr.filter(function(x){ return (x.rating || 0) >= 4.5; }).length;
-  var phs = arr.filter(function(x){ return compactPhone(x.phone || (x._apolloCompany && x._apolloCompany.phone) || ''); }).length;
+  var phs = arr.filter(function(x){ return !!choosePhone(x); }).length;
+  var emails = arr.filter(function(x){ return !!chooseEmail(x); }).length;
   var cities = arr.filter(function(x){ var cs = getCityState(x.address || x.formatted_address || x.formattedAddress || x.vicinity || '', x); return cs.city; }).length;
-  var apLoaded = arr.filter(function(x){ return x._apolloLoaded; }).length;
   setText('ls-tot', arr.length);
   setText('ls-hot', hot);
   setText('ls-ph', phs);
-  setText('ls-em', cities);
-  setText('ls-ap', apLoaded);
+  setText('ls-em', emails);
+  setText('ls-ap', cities);
   showElFlex('ls-sv');
   setText('ls-cnt', arr.length + ' results');
   setText('ls-meta-city', cities + ' rows with city and state filled');
-  setText('ls-meta-apollo', apLoaded + ' Apollo company lookups completed');
+  setText('ls-meta-apollo', emails + ' rows with public email found');
   showEl('ls-out');
-  try { document.getElementById('ls-out').scrollIntoView({ behavior:'smooth', block:'nearest' }); } catch (e) {}
+  try {
+    document.getElementById('ls-out').scrollIntoView({ behavior:'smooth', block:'nearest' });
+  } catch(e) {}
 }
 
 function resetSearch() { hideEl('ls-out'); hideEl('ls-sv'); hideEl('ls-eb'); leads = []; }
