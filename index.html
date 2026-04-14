@@ -1,4 +1,4 @@
-!DOCTYPE html>
+<!DOCTYPE html>
 
 <html lang="en">
 <head>
@@ -560,37 +560,89 @@ function doCSV() {
   URL.revokeObjectURL(url);
 }
 
+async function apolloFindContacts(lead) {
+  var payload = {
+    companyName: lead.name || lead.displayName || '',
+    website: lead.website || lead.websiteUri || '',
+    city: lead.formatted_address || lead.formattedAddress || lead.vicinity || '',
+    phone: lead.formatted_phone_number || lead.nationalPhoneNumber || lead.internationalPhoneNumber || ''
+  };
+
+  var res = await fetch(API + '/api/apollo/find-contacts', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+
+  if (!res.ok) {
+    var txt = '';
+    try { txt = await res.text(); } catch (e) {}
+    throw new Error('Apollo lookup failed: ' + (txt || ('HTTP ' + res.status)));
+  }
+
+  return res.json();
+}
+
 function bulkAdd() {
   if (!leads.length) return;
   var n = 0;
+
   for (var i = 0; i < leads.length; i++) {
     var l = leads[i];
-    var nm = l.name||l.displayName||'';
+    var nm = l.name || l.displayName || '';
     if (inCRM(nm)) continue;
-    crm.push(mkRecord(l, [{name:'Business Owner',title:'Owner / Decision Maker',email:'(Apollo will enrich)',phone:l.formatted_phone_number||''}]));
+
+    crm.push(mkRecord(l, [{
+      name: 'Pending Apollo Lookup',
+      title: 'Decision Maker Not Loaded',
+      email: '',
+      phone: l.formatted_phone_number || l.nationalPhoneNumber || l.internationalPhoneNumber || ''
+    }]));
+
     n++;
   }
-  saveC(); drawLeads(leads); toast(n+' leads added to CRM');
+
+  saveC();
+  drawLeads(leads);
+  toast(n + ' leads added to CRM');
 }
 
 // IMPORT MODAL
-function openImp(idx) {
+async function openImp(idx) {
   impLead = leads[idx];
   var nm = impLead.name || impLead.displayName || 'Business';
   document.getElementById('imp-title').textContent = 'Import: ' + nm;
-  var ph = impLead.formatted_phone_number || impLead.nationalPhoneNumber || impLead.internationalPhoneNumber || '(Apollo will enrich)';
-  impCons = [{name:'Business Owner',title:'Owner / Decision Maker',email:'(Apollo will enrich)',phone:ph}];
+  document.getElementById('imp-list').innerHTML = '<div style="color:#8fa3c0;font-size:12px;padding:10px">Loading Apollo contacts...</div>';
   selCons = [];
-  var html = '';
-  for (var i = 0; i < impCons.length; i++) {
-    var c = impCons[i];
-    html += '<div class="csi" id="ci'+i+'" onclick="togCon('+i+')">';
-    html += '<div class="cchk" id="ck'+i+'">&#10003;</div>';
-    html += '<div><div class="ci-name">'+esc(c.name)+'</div><div class="ci-title">'+esc(c.title)+'</div><div class="ci-info">'+esc(c.email)+'</div><div class="ci-info">'+esc(c.phone)+'</div></div>';
-    html += '</div>';
-  }
-  document.getElementById('imp-list').innerHTML = html;
   document.getElementById('m-import').classList.add('open');
+
+  try {
+    var data = await apolloFindContacts(impLead);
+    impCons = Array.isArray(data.contacts) ? data.contacts : [];
+
+    if (!impCons.length) {
+      var ph = impLead.formatted_phone_number || impLead.nationalPhoneNumber || impLead.internationalPhoneNumber || '';
+      impCons = [{
+        name: 'Business Owner',
+        title: 'Owner / Decision Maker',
+        email: '',
+        phone: ph
+      }];
+    }
+
+    var html = '';
+    for (var i = 0; i < impCons.length; i++) {
+      var c = impCons[i];
+      html += '<div class="csi" id="ci' + i + '" onclick="togCon(' + i + ')">';
+      html += '<div class="cchk" id="ck' + i + '">&#10003;</div>';
+      html += '<div><div class="ci-name">' + esc(c.name || '') + '</div><div class="ci-title">' + esc(c.title || '') + '</div><div class="ci-info">' + esc(c.email || '') + '</div><div class="ci-info">' + esc(c.phone || '') + '</div></div>';
+      html += '</div>';
+    }
+
+    document.getElementById('imp-list').innerHTML = html || '<div style="color:#4a6080;font-size:12px;padding:10px">No Apollo contacts found.</div>';
+  } catch (err) {
+    document.getElementById('imp-list').innerHTML = '<div style="color:#fca5a5;font-size:12px;padding:10px">' + esc(err.message || 'Apollo lookup failed') + '</div>';
+  }
 }
 
 function togCon(i) {
