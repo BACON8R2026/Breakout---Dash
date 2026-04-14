@@ -29,7 +29,7 @@ body::before { content: ''; position: fixed; inset: 0; background-image: linear-
 
 /* MAIN */
 .main { background: #080c18; min-height: 100vh; position: relative; z-index: 1; }
-.pnl { padding: 32px 28px 80px; max-width: 960px; margin: 0 auto; background: #080c18; }
+.pnl { padding: 32px 28px 80px; max-width: 1180px; margin: 0 auto; background: #080c18; }
 .pnl-full { background: #080c18; min-height: calc(100vh - 56px); }
 
 /* HOME */
@@ -100,7 +100,7 @@ body::before { content: ''; position: fixed; inset: 0; background-image: linear-
 .outbody::-webkit-scrollbar-thumb { background: rgba(249,115,22,0.3); border-radius: 2px; }
 
 /* TABLE */
-.ltbl { width: 100%; min-width: 980px; border-collapse: separate; border-spacing: 0; table-layout: fixed; }
+.ltbl { width: 100%; min-width: 1020px; border-collapse: separate; border-spacing: 0; table-layout: fixed; }
 .ltbl th { font-size: 10px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; color: #4a6080; padding: 11px 14px; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.07); background: #161e30; white-space: nowrap; position: sticky; top: 0; z-index: 2; }
 .ltbl td { font-size: 12px; color: #8fa3c0; padding: 14px; border-bottom: 1px solid rgba(255,255,255,0.05); vertical-align: top; background: rgba(10,16,28,0.92); }
 .ltbl tr:last-child td { border-bottom: none; }
@@ -371,7 +371,7 @@ body::before { content: ''; position: fixed; inset: 0; background-image: linear-
     </div>
     <div class="outbody">
       <table class="ltbl">
-        <thead><tr><th>Business Name</th><th>Location</th><th>Company Phone</th><th>Industry</th><th>Employees</th><th>Email</th><th>Website</th></tr></thead>
+        <thead><tr><th>Business Name</th><th>Location</th><th>Company Phone</th><th>Industry</th><th>Employees</th><th>Email</th><th>Website</th><th>CRM</th></tr></thead>
         <tbody id="ls-body"></tbody>
       </table>
     </div>
@@ -504,6 +504,13 @@ function go(id) {
 }
 
 function esc(s) { if (!s) return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function pickPresent() {
+  for (var i = 0; i < arguments.length; i++) {
+    var v = arguments[i];
+    if (v !== undefined && v !== null && String(v) !== '') return v;
+  }
+  return '';
+}
 function uid() { return 'c' + Date.now() + Math.random().toString(36).substr(2,5); }
 function saveC() { try { localStorage.setItem('bai_crm', JSON.stringify(crm)); } catch(e) {} }
 function loadC() { try { var d = localStorage.getItem('bai_crm'); if (d) crm = JSON.parse(d); } catch(e) { crm = []; } }
@@ -514,6 +521,7 @@ function runSearch() {
   var c = document.getElementById('ls-c').value.trim();
   var radius = (document.getElementById('ls-radius') || {}).value || '';
   var r = document.getElementById('ls-r').value;
+  var radius = (document.getElementById('ls-radius') || {}).value || '';
   if (!q || !c) { showErr('ls-eb', 'Enter a business type and city.'); return; }
   hideEl('ls-eb'); hideEl('ls-out'); hideEl('ls-sv');
   document.getElementById('ls-btn').disabled = true;
@@ -555,11 +563,13 @@ function runSearch() {
 function normalizeLeadResult(item) {
   item = item || {};
   var company = item.company || item._apolloCompany || {};
-  var email = item.email || item.bestEmail || company.email || '';
-  var phone = item.phone || item.bestPhone || company.phone || item.formatted_phone_number || item.nationalPhoneNumber || item.internationalPhoneNumber || '';
-  var website = item.website || item.websiteUri || company.website || '';
-  var city = item.city || company.city || '';
-  var state = item.state || company.state || '';
+  var email = pickPresent(item.email, item.bestEmail, company.email, '');
+  var phone = pickPresent(item.phone, item.bestPhone, company.phone, item.formatted_phone_number, item.nationalPhoneNumber, item.internationalPhoneNumber, '');
+  var website = pickPresent(item.website, item.websiteUri, company.website, '');
+  var city = pickPresent(item.city, company.city, '');
+  var state = pickPresent(item.state, company.state, '');
+  var employees = pickPresent(item.employees, company.employees, '');
+  var industry = pickPresent(item.industry, company.industry, '');
   return Object.assign({}, item, {
     _apolloCompany: company,
     _apolloLoaded: item._apolloLoaded !== false,
@@ -568,8 +578,8 @@ function normalizeLeadResult(item) {
     website: website,
     city: city,
     state: state,
-    employees: item.employees || company.employees || '',
-    industry: item.industry || company.industry || '',
+    employees: employees,
+    industry: industry,
     _siteChecked: !!(item.pagesChecked || item.bestEmail || item.bestPhone),
     _sourceFlags: {
       apollo: !!(company && (company.phone || company.city || company.state || company.website || company.employees || company.industry)),
@@ -650,7 +660,7 @@ function drawLeads(arr) {
   var tb = document.getElementById('ls-body');
   tb.innerHTML = '';
   if (!arr.length) {
-    tb.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:28px;color:#4a6080">No results found.</td></tr>';
+    tb.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:28px;color:#4a6080">No results found.</td></tr>';
   } else {
     for (var i = 0; i < arr.length; i++) {
       var l = arr[i];
@@ -658,36 +668,25 @@ function drawLeads(arr) {
       var ad = l.address || l.formatted_address || l.formattedAddress || l.vicinity || '';
       var cityState = getCityState(ad, l);
       var ph = choosePhone(l);
-      var ic = inCRM(nm);
       var company = l._apolloCompany || l.company || {};
-      var employees = l.employees || company.employees || '';
+      var employees = pickPresent(l.employees, company.employees, '');
       var industry = resolveIndustry(l);
       var email = chooseEmail(l);
+      var website = chooseWebsite(l);
+      var ic = inCRM(nm);
+
       var tr = document.createElement('tr');
       tr.className = 'lrow-new';
-      tr.style.animationDelay = (i * 35) + 'ms';
+      tr.style.animationDelay = (i * 25) + 'ms';
 
       var nameBlock = '<span class="lname">' + esc(nm) + '</span>';
-
-      var locationBlock =
-        '<div class="cellstack">' +
-          '<span class="lcity">' + esc(cityState.city || '') + '</span>' +
-          (cityState.state ? '<span class="lsub">' + esc(cityState.state) + '</span>' : '') +
-        '</div>';
-
+      var locationBlock = '<div class="cellstack"><span class="lcity">' + esc(cityState.city || '') + '</span>' + (cityState.state ? '<span class="lsub">' + esc(cityState.state) + '</span>' : '') + '</div>';
       var phoneBlock = ph ? '<span class="lphone">' + esc(ph) + '</span>' : '<span class="lmuted">Not found</span>';
-
       var industryBlock = '<span class="lcontact">' + esc(industry) + '</span>';
-
-      var employeesBlock = employees ? '<span class="lcontact">' + esc(String(employees)) + '</span>' : '<span class="lmuted">&mdash;</span>';
-
+      var employeesBlock = String(employees) !== '' ? '<span class="lcontact">' + esc(String(employees)) + '</span>' : '<span class="lmuted">Not found</span>';
       var emailBlock = email ? '<span class="emailtxt">' + esc(email) + '</span>' : '<span class="lmuted">Not found</span>';
-      var website = chooseWebsite(l);
-      var websiteBlock =
-        '<div class="cellstack">' +
-          (website ? '<a class="llink" href="' + esc(website) + '" target="_blank" rel="noopener">Visit site &#8599;</a>' : '<span class="lmuted">Not found</span>') +
-          (ic ? '<span class="incrm">In CRM</span>' : '<button class="bsm ora" onclick="openImp(' + i + ')">Add</button>') +
-        '</div>';
+      var websiteBlock = website ? '<a class="llink" href="' + esc(website) + '" target="_blank" rel="noopener">Visit site &#8599;</a>' : '<span class="lmuted">Not found</span>';
+      var crmBlock = ic ? '<span class="incrm">In CRM</span>' : '<button class="bsm ora" onclick="openImp(' + i + ')">Add</button>';
 
       tr.innerHTML =
         '<td>' + nameBlock + '</td>' +
@@ -696,7 +695,8 @@ function drawLeads(arr) {
         '<td>' + industryBlock + '</td>' +
         '<td>' + employeesBlock + '</td>' +
         '<td>' + emailBlock + '</td>' +
-        '<td class="actioncell">' + websiteBlock + '</td>';
+        '<td>' + websiteBlock + '</td>' +
+        '<td class="actioncell">' + crmBlock + '</td>';
       tb.appendChild(tr);
     }
   }
@@ -704,7 +704,7 @@ function drawLeads(arr) {
   var hot = arr.filter(function(x){ return (x.rating || 0) >= 4.5; }).length;
   var phs = arr.filter(function(x){ return !!choosePhone(x); }).length;
   var emails = arr.filter(function(x){ return !!chooseEmail(x); }).length;
-  var emps = arr.filter(function(x){ var e = x.employees || (x._apolloCompany && x._apolloCompany.employees) || ''; return e !== '' && e !== '0'; }).length;
+  var emps = arr.filter(function(x){ return String(pickPresent(x.employees, x._apolloCompany && x._apolloCompany.employees, '')) !== ''; }).length;
   setText('ls-tot', arr.length);
   setText('ls-hot', hot);
   setText('ls-ph', phs);
@@ -715,9 +715,7 @@ function drawLeads(arr) {
   setText('ls-meta-city', phs + ' rows with company phone');
   setText('ls-meta-apollo', emails + ' rows with public email found');
   showEl('ls-out');
-  try {
-    document.getElementById('ls-out').scrollIntoView({ behavior:'smooth', block:'nearest' });
-  } catch(e) {}
+  try { document.getElementById('ls-out').scrollIntoView({ behavior:'smooth', block:'nearest' }); } catch(e) {}
 }
 
 function resetSearch() { hideEl('ls-out'); hideEl('ls-sv'); hideEl('ls-eb'); leads = []; }
@@ -727,7 +725,6 @@ function doCSV() {
   var rows = [['Business Name','City','State','Company Phone','Industry','Employees','Email','Website']];
   for (var i = 0; i < leads.length; i++) {
     var l = leads[i];
-    var company = l._apolloCompany || l.company || {};
     var ad = l.address || l.formatted_address || l.formattedAddress || l.vicinity || '';
     var cityState = getCityState(ad, l);
     rows.push([
@@ -736,12 +733,12 @@ function doCSV() {
       cityState.state || '',
       choosePhone(l),
       resolveIndustry(l),
-      l.employees || company.employees || '',
+      pickPresent(l.employees, l._apolloCompany && l._apolloCompany.employees, ''),
       chooseEmail(l),
       chooseWebsite(l)
     ]);
   }
-no
+  var csv = rows.map(function(r){ return r.map(function(c){ return '"' + String(c).replace(/"/g,'""') + '"'; }).join(','); }).join('\n');
   var blob = new Blob([csv], { type:'text/csv' });
   var url = URL.createObjectURL(blob);
   var a = document.createElement('a');
