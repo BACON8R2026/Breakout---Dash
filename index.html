@@ -350,7 +350,7 @@ body::before { content: ''; position: fixed; inset: 0; background-image: linear-
     <div class="svdiv"></div>
     <div class="svstat"><div class="svnum" id="ls-ph">0</div><div class="svlbl">Company Phone</div></div>
     <div class="svdiv"></div>
-    <div class="svstat"><div class="svnum" id="ls-em">0</div><div class="svlbl">Emails</div></div>
+    <div class="svstat"><div class="svnum" id="ls-em">0</div><div class="svlbl">Cities</div></div>
     <div class="svdiv"></div>
     <div class="svstat"><div class="svnum" id="ls-ap">0</div><div class="svlbl">Apollo Loaded</div></div>
   </div>
@@ -360,8 +360,8 @@ body::before { content: ''; position: fixed; inset: 0; background-image: linear-
         <div class="outtitle">Live Results</div>
         <div class="outmeta">
           <span><strong id="ls-cnt">0 results</strong></span>
-          <span id="ls-meta-city">Cleaner company and contact layout ready</span>
-          <span id="ls-meta-apollo">Apollo loading ready</span>
+          <span id="ls-meta-city">City and state will be split cleanly</span>
+          <span id="ls-meta-apollo">Apollo company enrichment ready</span>
         </div>
       </div>
       <div class="outacts">
@@ -372,7 +372,7 @@ body::before { content: ''; position: fixed; inset: 0; background-image: linear-
     </div>
     <div class="outbody">
       <table class="ltbl">
-        <thead><tr><th>Business</th><th>Location</th><th>Company</th><th>Contact</th><th>Outreach</th><th>CRM</th></tr></thead>
+        <thead><tr><th>Business</th><th>Location</th><th>Company</th><th>Industry</th><th>Email</th><th>CRM</th></tr></thead>
         <tbody id="ls-body"></tbody>
       </table>
     </div>
@@ -428,7 +428,7 @@ body::before { content: ''; position: fixed; inset: 0; background-image: linear-
   <div class="mcard wide">
     <button class="mclose" onclick="closeM('m-import')">&#215;</button>
     <div class="mtitle" id="imp-title">Import to CRM</div>
-    <div class="msub">Select contacts to import. Apollo data appears here once the lookup finishes.</div>
+    <div class="msub">Review the enriched company details below. Email lookup needs a paid Apollo people plan.</div>
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
       <span style="font-size:12px;color:#8fa3c0">Choose contacts</span>
       <button class="bsm ora" onclick="selAll()">Select All</button>
@@ -521,7 +521,7 @@ function runSearch() {
   setText('ls-st', 'Connecting to Google Places...');
   setText('ls-ap', '0');
   setText('ls-em', '0');
-  var msgs = ['Connecting to Google Places...', 'Searching ' + q + ' in ' + c + '...', 'Splitting address data...', 'Preparing Apollo lookup...', 'Almost done...'];
+  var msgs = ['Connecting to Google Places...', 'Searching ' + q + ' in ' + c + '...', 'Splitting city and state...', 'Loading Apollo company details...', 'Almost done...'];
   var mi = 0;
   var iv = setInterval(function() { if (mi < msgs.length) { document.getElementById('ls-st').textContent = msgs[mi++]; } }, 700);
   var url = API + '/api/places/search?query=' + encodeURIComponent(q + ' ' + c);
@@ -534,7 +534,7 @@ function runSearch() {
       var results = data.results || data || [];
       if (!Array.isArray(results)) results = [];
       leads = results.map(function(item){
-        item._apolloContacts = [];
+        item._apolloCompany = null;
         item._apolloLoaded = false;
         item._apolloError = '';
         return item;
@@ -551,7 +551,11 @@ function runSearch() {
 
 function inCRM(name) { for (var i = 0; i < crm.length; i++) { if (crm[i].biz === name) return true; } return false; }
 
-function getCityState(address) {
+function getCityState(address, lead) {
+  var company = lead && lead._apolloCompany ? lead._apolloCompany : null;
+  if (company && (company.city || company.state)) {
+    return { city: company.city || '', state: company.state || '' };
+  }
   var raw = String(address || '').trim();
   if (!raw) return { city: '', state: '' };
   var parts = raw.split(',').map(function(x){ return x.trim(); }).filter(Boolean);
@@ -570,26 +574,19 @@ function getCityState(address) {
   return { city: city, state: state };
 }
 
-function topApolloContact(lead) {
-  if (!lead || !lead._apolloContacts || !lead._apolloContacts.length) return null;
-  return lead._apolloContacts[0] || null;
-}
-
 function compactPhone(v) {
   var s = String(v || '').trim();
-  return s || '';
+  return s && s !== 'N/A' ? s : '';
 }
 
 async function hydrateLeadsWithApollo(arr) {
   if (!Array.isArray(arr) || !arr.length) return;
-  var limit = Math.min(arr.length, 8);
-  var loaded = 0;
+  var limit = Math.min(arr.length, 20);
   for (var i = 0; i < limit; i++) {
     try {
-      var data = await apolloFindContacts(arr[i]);
-      arr[i]._apolloContacts = Array.isArray(data.contacts) ? data.contacts : [];
+      var data = await apolloEnrichCompany(arr[i]);
+      arr[i]._apolloCompany = data && data.company ? data.company : null;
       arr[i]._apolloLoaded = true;
-      loaded++;
       drawLeads(leads);
     } catch (err) {
       arr[i]._apolloLoaded = true;
@@ -608,20 +605,19 @@ function drawLeads(arr) {
     for (var i = 0; i < arr.length; i++) {
       var l = arr[i];
       var nm = l.name || l.displayName || '';
-      var ad = l.formatted_address || l.formattedAddress || l.vicinity || '';
-      var cityState = getCityState(ad);
-      var ph = compactPhone(l.formatted_phone_number || l.nationalPhoneNumber || l.internationalPhoneNumber || l._apolloCompanyPhone || '');
-      var wb = l.website || l.websiteUri || '';
+      var ad = l.address || l.formatted_address || l.formattedAddress || l.vicinity || '';
+      var company = l._apolloCompany || {};
+      var cityState = getCityState(ad, l);
+      var ph = compactPhone(l.phone || l.formatted_phone_number || l.nationalPhoneNumber || l.internationalPhoneNumber || company.phone || '');
+      var wb = company.website || l.website || l.websiteUri || '';
       var rt = l.rating || '';
       var ic = inCRM(nm);
-      var top = topApolloContact(l);
-      var contactName = top && top.name ? top.name : (l._apolloLoaded ? '' : 'Loading...');
-      var contactTitle = top && top.title ? top.title : '';
-      var contactEmail = top && top.email ? top.email : '';
-      var contactPhone = top && top.phone ? top.phone : '';
+      var employees = company.employees || '';
+      var industry = company.industry || '';
       var tr = document.createElement('tr');
       tr.className = 'lrow-new';
       tr.style.animationDelay = (i * 35) + 'ms';
+
       var companyBlock =
         '<div class="cellstack">' +
           '<span class="lname">' + esc(nm) + '</span>' +
@@ -641,42 +637,42 @@ function drawLeads(arr) {
           '<div class="cellline">' + (rt ? '<span class="rchip">â ' + esc(String(rt)) + '</span>' : '<span class="mini-chip">No rating</span>') + (l._apolloLoaded ? '<span class="mini-chip apollo-pill">Apollo ready</span>' : '<span class="mini-chip">Loading Apollo</span>') + '</div>' +
         '</div>';
 
-      var contactBlock =
+      var industryBlock =
         '<div class="cellstack">' +
-          '<span class="lcontact">' + esc(contactName || 'Contact not found') + '</span>' +
-          '<span class="lsub">' + esc(contactTitle || 'Title not found') + '</span>' +
+          '<span class="lcontact">' + esc(industry || 'Industry not found') + '</span>' +
+          '<span class="lsub">' + esc(employees ? employees + ' employees' : 'Employee count not found') + '</span>' +
         '</div>';
 
-      var outreachBlock =
+      var emailBlock =
         '<div class="cellstack">' +
-          '<span class="emailtxt">' + esc(contactEmail || 'Email not found') + '</span>' +
-          '<span class="lsub">' + esc(contactPhone || 'Mobile not found') + '</span>' +
+          '<span class="emailtxt">Email requires paid Apollo people plan</span>' +
+          '<span class="lsub">Company enrichment is live now</span>' +
         '</div>';
 
       tr.innerHTML =
         '<td>' + companyBlock + '</td>' +
         '<td>' + locationBlock + '</td>' +
         '<td>' + companyDetailBlock + '</td>' +
-        '<td>' + contactBlock + '</td>' +
-        '<td>' + outreachBlock + '</td>' +
+        '<td>' + industryBlock + '</td>' +
+        '<td>' + emailBlock + '</td>' +
         '<td class="actioncell">' + (ic ? '<span class="incrm">In CRM</span>' : '<button class="bsm ora" onclick="openImp(' + i + ')">Add</button>') + '</td>';
       tb.appendChild(tr);
     }
   }
 
   var hot = arr.filter(function(x){ return (x.rating || 0) >= 4.5; }).length;
-  var phs = arr.filter(function(x){ return x.formatted_phone_number || x.nationalPhoneNumber || x.internationalPhoneNumber || x._apolloCompanyPhone; }).length;
-  var emails = arr.filter(function(x){ var top = topApolloContact(x); return top && top.email; }).length;
+  var phs = arr.filter(function(x){ return compactPhone(x.phone || (x._apolloCompany && x._apolloCompany.phone) || ''); }).length;
+  var cities = arr.filter(function(x){ var cs = getCityState(x.address || x.formatted_address || x.formattedAddress || x.vicinity || '', x); return cs.city; }).length;
   var apLoaded = arr.filter(function(x){ return x._apolloLoaded; }).length;
   setText('ls-tot', arr.length);
   setText('ls-hot', hot);
   setText('ls-ph', phs);
-  setText('ls-em', emails);
+  setText('ls-em', cities);
   setText('ls-ap', apLoaded);
   showElFlex('ls-sv');
   setText('ls-cnt', arr.length + ' results');
-  setText('ls-meta-city', 'Company details and contact details are now grouped cleanly');
-  setText('ls-meta-apollo', apLoaded + ' Apollo lookups completed');
+  setText('ls-meta-city', cities + ' rows with city and state filled');
+  setText('ls-meta-apollo', apLoaded + ' Apollo company lookups completed');
   showEl('ls-out');
   try { document.getElementById('ls-out').scrollIntoView({ behavior:'smooth', block:'nearest' }); } catch (e) {}
 }
@@ -685,24 +681,23 @@ function resetSearch() { hideEl('ls-out'); hideEl('ls-sv'); hideEl('ls-eb'); lea
 
 function doCSV() {
   if (!leads.length) return;
-  var rows = [['Name','City','State','Address','Company Phone','Website','Rating','Top Contact','Title','Email','Mobile']];
+  var rows = [['Name','City','State','Address','Company Phone','Website','Rating','Employees','Industry','Email Status']];
   for (var i = 0; i < leads.length; i++) {
     var l = leads[i];
-    var ad = l.formatted_address || l.formattedAddress || l.vicinity || '';
-    var cityState = getCityState(ad);
-    var top = topApolloContact(l) || {};
+    var company = l._apolloCompany || {};
+    var ad = l.address || l.formatted_address || l.formattedAddress || l.vicinity || '';
+    var cityState = getCityState(ad, l);
     rows.push([
       l.name || l.displayName || '',
       cityState.city || '',
       cityState.state || '',
       ad,
-      l.formatted_phone_number || l.nationalPhoneNumber || l.internationalPhoneNumber || '',
-      l.website || l.websiteUri || '',
+      l.phone || company.phone || '',
+      company.website || l.website || l.websiteUri || '',
       l.rating || '',
-      top.name || '',
-      top.title || '',
-      top.email || '',
-      top.phone || ''
+      company.employees || '',
+      company.industry || '',
+      'Paid Apollo people plan needed'
     ]);
   }
   var csv = rows.map(function(r){return r.map(function(c){return '"' + String(c).replace(/"/g,'""') + '"';}).join(',');}).join('\n');
@@ -715,15 +710,13 @@ function doCSV() {
   URL.revokeObjectURL(url);
 }
 
-async function apolloFindContacts(lead) {
+async function apolloEnrichCompany(lead) {
   var payload = {
     companyName: lead.name || lead.displayName || '',
-    website: lead.website || lead.websiteUri || '',
-    city: lead.formatted_address || lead.formattedAddress || lead.vicinity || '',
-    phone: lead.formatted_phone_number || lead.nationalPhoneNumber || lead.internationalPhoneNumber || ''
+    website: lead.website || lead.websiteUri || ''
   };
 
-  var res = await fetch(API + '/api/apollo/find-contacts', {
+  var res = await fetch(API + '/api/apollo/enrich-company', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload)
@@ -732,7 +725,7 @@ async function apolloFindContacts(lead) {
   if (!res.ok) {
     var txt = '';
     try { txt = await res.text(); } catch (e) {}
-    throw new Error('Apollo lookup failed: ' + (txt || ('HTTP ' + res.status)));
+    throw new Error('Apollo company enrich failed: ' + (txt || ('HTTP ' + res.status)));
   }
 
   return res.json();
@@ -838,9 +831,9 @@ function mkRecord(l, cons) {
     id: uid(),
     biz: l.name||l.displayName||'Unknown',
     type: (document.getElementById('ls-q')||{}).value||'',
-    city: l.formatted_address||l.formattedAddress||l.vicinity||'',
-    phone: l.formatted_phone_number||l.nationalPhoneNumber||l.internationalPhoneNumber||'',
-    web: l.website||l.websiteUri||'',
+    city: l.address||l.formatted_address||l.formattedAddress||l.vicinity||'',
+    phone: l.phone||l.formatted_phone_number||l.nationalPhoneNumber||l.internationalPhoneNumber||((l._apolloCompany&&l._apolloCompany.phone)||''),
+    web: ((l._apolloCompany&&l._apolloCompany.website)||l.website||l.websiteUri||''),
     rating: l.rating||'',
     rev: '', deal: '', notes: '', fu: '',
     stage: 'new', status: 'lead',
