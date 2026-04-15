@@ -115,6 +115,35 @@ body::before { content: ''; position: fixed; inset: 0; background-image: linear-
 .muted { color: #4a6080; }
 .lrow-new { animation: rowSlide 0.3s ease both; }
 
+
+.lead-deck { display: grid; gap: 14px; padding: 14px; }
+.lead-row { display: grid; grid-template-columns: minmax(0,1.15fr) minmax(0,0.85fr); gap: 14px; align-items: stretch; animation: rowSlide 0.3s ease both; }
+.info-card { background: #111a2c; border: 1px solid rgba(255,255,255,0.07); border-radius: 14px; padding: 16px; min-height: 184px; }
+.info-card.biz-card { border-color: rgba(249,115,22,0.18); }
+.info-card.contact-card { border-color: rgba(52,211,153,0.16); }
+.card-hd { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.card-title { font-family: 'Syne', sans-serif; font-size: 18px; font-weight: 800; color: #e8edf5; line-height: 1.15; }
+.card-sub { font-size: 12px; color: #8fa3c0; line-height: 1.5; margin-top: 4px; }
+.card-chip { display: inline-flex; align-items: center; gap: 5px; padding: 5px 9px; border-radius: 999px; font-size: 10px; font-weight: 700; letter-spacing: 0.7px; text-transform: uppercase; color: #fb923c; background: rgba(249,115,22,0.1); border: 1px solid rgba(249,115,22,0.24); white-space: nowrap; }
+.biz-grid, .contact-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 10px; }
+.meta-box { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; padding: 10px 11px; min-height: 58px; }
+.meta-label { font-size: 10px; color: #4a6080; text-transform: uppercase; letter-spacing: 0.7px; margin-bottom: 4px; }
+.meta-value { font-size: 13px; color: #e8edf5; line-height: 1.4; word-break: break-word; }
+.meta-value.muted, .muted { color: #4a6080; }
+.card-ft { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+.contact-empty { display: flex; flex-direction: column; justify-content: space-between; min-height: 100%; }
+.contact-empty-text { font-size: 12px; color: #8fa3c0; line-height: 1.6; }
+.contact-primary { margin-bottom: 10px; }
+.contact-name { font-family: 'Syne', sans-serif; font-size: 18px; font-weight: 800; color: #e8edf5; line-height: 1.15; }
+.contact-role { font-size: 12px; color: #fb923c; margin-top: 4px; }
+.contact-more { margin-top: 10px; display: grid; gap: 8px; }
+.contact-mini { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; padding: 10px 11px; }
+.contact-mini-name { font-size: 13px; font-weight: 700; color: #e8edf5; }
+.contact-mini-role { font-size: 11px; color: #fb923c; margin-top: 2px; }
+.contact-mini-line { font-size: 11px; color: #8fa3c0; margin-top: 3px; word-break: break-word; }
+.link-muted { color: #fb923c; text-decoration: none; }
+.link-muted:hover { text-decoration: underline; }
+
 /* CRM */
 .crm-top { display: flex; align-items: center; justify-content: space-between; padding: 14px 22px; border-bottom: 1px solid rgba(255,255,255,0.07); background: #0f1623; flex-wrap: wrap; gap: 10px; }
 .crm-ttl { font-family: 'Syne', sans-serif; font-size: 20px; font-weight: 800; color: #e8edf5; display: flex; align-items: center; gap: 10px; }
@@ -345,22 +374,7 @@ body::before { content: ''; position: fixed; inset: 0; background-image: linear-
         <button class="bsm" onclick="resetSearch()">New Search</button>
       </div>
     </div>
-    <div class="outbody">
-      <table class="ltbl">
-        <thead>
-          <tr>
-            <th>Business</th>
-            <th>City</th>
-            <th>State</th>
-            <th>Phone</th>
-            <th>Website</th>
-            <th>Rating</th>
-            <th>CRM</th>
-          </tr>
-        </thead>
-        <tbody id="ls-body"></tbody>
-      </table>
-    </div>
+    <div class="lead-deck" id="ls-body"></div>
   </div>
 </div>
 
@@ -533,7 +547,6 @@ function renderImportContacts() {
       html += '<div class="ci-title">' + (c.title ? esc(c.title) : 'No title found') + '</div>';
       html += '<div class="ci-info">' + (c.email ? esc(c.email) : 'No email found') + '</div>';
       html += '<div class="ci-info">' + (c.phone ? esc(c.phone) : 'No phone found') + '</div>';
-      if (c.linkedinUrl) html += '<div class="ci-info"><a class="llink" href="' + esc(c.linkedinUrl) + '" target="_blank" rel="noopener">LinkedIn â</a></div>';
       html += '<div class="ci-info">Source: ' + esc(c.source || 'website') + ' Â· Confidence: ' + esc(String(c.confidence || 0)) + '</div>';
       html += '</div></div>';
     }
@@ -655,12 +668,104 @@ function inCRM(name) {
   return false;
 }
 
+
+function getLeadEmployees(lead) {
+  return lead && (lead.employees || lead.employeeCount || lead.numEmployees || lead.companyEmployees || '');
+}
+
+function getLeadPreviewContacts(lead) {
+  if (!lead || !Array.isArray(lead._previewContacts)) return [];
+  return lead._previewContacts;
+}
+
+function contactPreviewHtml(idx, lead) {
+  var contacts = getLeadPreviewContacts(lead);
+  var loading = !!lead._loadingContacts;
+  var expanded = !!lead._contactsExpanded;
+  if (loading) {
+    return '<div class="contact-empty"><div class="contact-empty-text">Looking through the website and fallback sources for contacts...</div></div>';
+  }
+  if (!contacts.length) {
+    return '<div class="contact-empty">' +
+      '<div class="contact-empty-text">No contact loaded yet. Pull the best contact from the website before importing this company.</div>' +
+      '<div class="card-ft"><button class="bsm ora" onclick="previewContacts(' + idx + ')">Preview Contact</button><button class="bsm" onclick="openImp(' + idx + ')">Open Import</button></div>' +
+    '</div>';
+  }
+
+  var primary = contacts[0];
+  var html = '';
+  html += '<div class="contact-primary">';
+  html += '<div class="contact-name">' + esc(primary.name || 'Unnamed Contact') + '</div>';
+  html += '<div class="contact-role">' + esc(primary.title || 'No title found') + '</div>';
+  html += '</div>';
+  html += '<div class="contact-grid">';
+  html += '<div class="meta-box"><div class="meta-label">Email</div><div class="meta-value">' + (primary.email ? esc(primary.email) : '<span class="muted">No email found</span>') + '</div></div>';
+  html += '<div class="meta-box"><div class="meta-label">Phone</div><div class="meta-value">' + (primary.phone ? esc(primary.phone) : '<span class="muted">No phone found</span>') + '</div></div>';
+  html += '</div>';
+  html += '<div class="card-ft">';
+  html += '<div class="meta-label">Source ' + esc(primary.source || 'website') + ' Â· Confidence ' + esc(String(primary.confidence || 0)) + '</div>';
+  html += '<div style="display:flex;gap:8px;flex-wrap:wrap">';
+  if (contacts.length > 1) {
+    html += '<button class="bsm" onclick="toggleMoreContacts(' + idx + ')">' + (expanded ? 'Hide More' : ('View ' + (contacts.length - 1) + ' More')) + '</button>';
+  }
+  html += '<button class="bsm ora" onclick="openImp(' + idx + ')">Add Contact</button>';
+  html += '</div></div>';
+
+  if (expanded && contacts.length > 1) {
+    html += '<div class="contact-more">';
+    for (var i = 1; i < contacts.length; i++) {
+      var c = contacts[i];
+      html += '<div class="contact-mini">';
+      html += '<div class="contact-mini-name">' + esc(c.name || 'Unnamed Contact') + '</div>';
+      html += '<div class="contact-mini-role">' + esc(c.title || 'No title found') + '</div>';
+      html += '<div class="contact-mini-line">' + (c.email ? esc(c.email) : 'No email found') + '</div>';
+      html += '<div class="contact-mini-line">' + (c.phone ? esc(c.phone) : 'No phone found') + '</div>';
+      html += '</div>';
+    }
+    html += '</div>';
+  }
+  return html;
+}
+
+async function previewContacts(idx) {
+  var lead = leads[idx];
+  if (!lead) return;
+  lead._loadingContacts = true;
+  drawLeads(leads);
+  try {
+    var data = await enrichLeadForImport(lead);
+    var contacts = [];
+    if (data && Array.isArray(data.allContacts) && data.allContacts.length) {
+      contacts = data.allContacts;
+    } else if (data && data.contact) {
+      contacts = [data.contact];
+    }
+    lead._previewContacts = contacts.map(function(c){ return normalizeImportContact(c, lead); })
+      .filter(function(c){ return c.name || c.email || c.phone; });
+    lead._contactsExpanded = false;
+  } catch (err) {
+    lead._previewContacts = [];
+    lead._previewError = err && err.message ? err.message : 'Contact enrichment failed';
+  } finally {
+    lead._loadingContacts = false;
+    drawLeads(leads);
+  }
+}
+
+function toggleMoreContacts(idx) {
+  var lead = leads[idx];
+  if (!lead) return;
+  lead._contactsExpanded = !lead._contactsExpanded;
+  drawLeads(leads);
+}
+
 function drawLeads(arr) {
-  var tb = document.getElementById('ls-body');
-  tb.innerHTML = '';
+  var deck = document.getElementById('ls-body');
+  if (!deck) return;
+  deck.innerHTML = '';
 
   if (!arr.length) {
-    tb.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:28px;color:#4a6080">No results found.</td></tr>';
+    deck.innerHTML = '<div style="text-align:center;padding:28px;color:#4a6080">No results found.</div>';
   } else {
     for (var i = 0; i < arr.length; i++) {
       var l = arr[i];
@@ -671,25 +776,32 @@ function drawLeads(arr) {
       var ph = l.phone || '';
       var wb = l.website || '';
       var rt = l.rating;
+      var employees = getLeadEmployees(l);
       var ic = inCRM(nm);
 
-      var tr = document.createElement('tr');
-      tr.className = 'lrow-new';
-      tr.style.animationDelay = (i * 35) + 'ms';
+      var row = document.createElement('div');
+      row.className = 'lead-row';
+      row.style.animationDelay = (i * 35) + 'ms';
 
-      tr.innerHTML =
-        '<td>' +
-          '<div class="lname">' + esc(nm) + '</div>' +
-          '<div class="lmeta">' + esc(ad) + '</div>' +
-        '</td>' +
-        '<td>' + (city ? esc(city) : '<span class="muted">&#8212;</span>') + '</td>' +
-        '<td>' + (state ? esc(state) : '<span class="muted">&#8212;</span>') + '</td>' +
-        '<td>' + ((ph && ph !== 'N/A') ? '<span class="lphone">' + esc(ph) + '</span>' : '<span class="muted">&#8212;</span>') + '</td>' +
-        '<td>' + ((wb && wb !== 'N/A') ? '<a class="llink" href="' + esc(wb) + '" target="_blank" rel="noopener">Visit &#8599;</a>' : '<span class="muted">&#8212;</span>') + '</td>' +
-        '<td>' + (rt ? '<span class="rchip">&#9733; ' + esc(String(rt)) + '</span>' : '<span class="muted">&#8212;</span>') + '</td>' +
-        '<td>' + (ic ? '<span class="incrm">In CRM</span>' : '<button class="bsm ora" onclick="openImp(' + i + ')">+ Add</button>') + '</td>';
+      var bizHtml = '';
+      bizHtml += '<div class="info-card biz-card">';
+      bizHtml += '<div class="card-hd">';
+      bizHtml += '<div><div class="card-title">' + esc(nm || 'Unknown Business') + '</div><div class="card-sub">' + (ad ? esc(ad) : 'No address found') + '</div></div>';
+      bizHtml += '<div class="card-chip">' + (rt ? ('â ' + esc(String(rt))) : 'No Rating') + '</div>';
+      bizHtml += '</div>';
+      bizHtml += '<div class="biz-grid">';
+      bizHtml += '<div class="meta-box"><div class="meta-label">City</div><div class="meta-value">' + (city ? esc(city) : '<span class="muted">Unknown</span>') + '</div></div>';
+      bizHtml += '<div class="meta-box"><div class="meta-label">State</div><div class="meta-value">' + (state ? esc(state) : '<span class="muted">Unknown</span>') + '</div></div>';
+      bizHtml += '<div class="meta-box"><div class="meta-label">Main Phone</div><div class="meta-value">' + ((ph && ph !== 'N/A') ? esc(ph) : '<span class="muted">No phone found</span>') + '</div></div>';
+      bizHtml += '<div class="meta-box"><div class="meta-label">Employees</div><div class="meta-value">' + (employees ? esc(String(employees)) : '<span class="muted">Not available</span>') + '</div></div>';
+      bizHtml += '<div class="meta-box" style="grid-column:1 / -1"><div class="meta-label">Website</div><div class="meta-value">' + ((wb && wb !== 'N/A') ? '<a class="link-muted" href="' + esc(wb) + '" target="_blank" rel="noopener">' + esc(wb) + '</a>' : '<span class="muted">No website found</span>') + '</div></div>';
+      bizHtml += '</div>';
+      bizHtml += '<div class="card-ft"><div class="meta-label">Source ' + esc(l.source || 'google') + '</div><div style="display:flex;gap:8px;flex-wrap:wrap">' + (ic ? '<span class="incrm">In CRM</span>' : '<button class="bsm ora" onclick="openImp(' + i + ')">+ Add to CRM</button>') + '<button class="bsm" onclick="previewContacts(' + i + ')">Refresh Contact</button></div></div>';
+      bizHtml += '</div>';
 
-      tb.appendChild(tr);
+      var contactHtml = '<div class="info-card contact-card">' + contactPreviewHtml(i, l) + '</div>';
+      row.innerHTML = bizHtml + contactHtml;
+      deck.appendChild(row);
     }
   }
 
@@ -779,7 +891,7 @@ async function openImp(idx) {
     }
 
     impCons = contacts.map(function (c) { return normalizeImportContact(c, impLead); })
-      .filter(function (c) { return c.name || c.email || c.phone || c.linkedinUrl; });
+      .filter(function (c) { return c.name || c.email || c.phone; });
 
     if (!impCons.length) {
       impCons = [];
