@@ -1231,8 +1231,8 @@ body::before {
 
 <script>
 const CONFIG = {
-  GOOGLE_DISCOVERY_URL: 'https://YOUR_BACKEND_HERE/api/leads/google-discovery',
-  COMBINED_ENRICH_URL: 'https://YOUR_BACKEND_HERE/api/leads/combined-search',
+  GOOGLE_DISCOVERY_URL: '/api/leads/google-discovery',
+  COMBINED_ENRICH_URL: '/api/leads/combined-search',
   DOWNLOAD_TIMEOUT_MS: 45000,
   GOOGLE_HARD_RADIUS_LIMIT_MILES: 31
 };
@@ -1990,4 +1990,92 @@ function downloadCSV() {
 function setCrmView(value) {
   crmView = value;
   ['all','lead','prospect','account'].forEach((key) => {
-    const e
+    const el = document.getElementById('ct-' + key);
+    if (el) el.classList.toggle('on', key === value);
+  });
+  drawKanban();
+}
+
+function drawCRM() {
+  const leadCount = crm.filter((item) => item.status === 'lead').length;
+  const prospectCount = crm.filter((item) => item.status === 'prospect').length;
+  const accountCount = crm.filter((item) => item.status === 'account' && item.stage === 'won').length;
+  const pipelineValue = crm.reduce((sum, item) => sum + parseMoney(item.revenue), 0);
+
+  setText('cs-leads', String(leadCount));
+  setText('cs-prospects', String(prospectCount));
+  setText('cs-accounts', String(accountCount));
+  setText('cs-pipe', '$' + pipelineValue.toLocaleString());
+
+  setText('cc-all', String(crm.length));
+  setText('cc-lead', String(leadCount));
+  setText('cc-prospect', String(prospectCount));
+  setText('cc-account', String(accountCount));
+
+  drawKanban();
+}
+
+function drawKanban() {
+  const board = document.getElementById('kboard');
+  board.innerHTML = '';
+
+  STAGES.forEach((stage) => {
+    const stageItems = crm.filter((item) => {
+      const statusMatch = crmView === 'all' ? true : item.status === crmView;
+      return item.stage === stage.key && statusMatch;
+    });
+
+    const col = document.createElement('div');
+    col.className = 'kcol ' + stage.col;
+    col.innerHTML = '<div class="kcol-hd"><div class="kcol-title">' + esc(stage.label) + '</div><div class="kcol-cnt">' + stageItems.length + '</div></div>';
+
+    const cards = document.createElement('div');
+    cards.className = 'kcards';
+
+    if (!stageItems.length) {
+      cards.innerHTML = '<div class="kempty">No records</div>';
+    } else {
+      stageItems.forEach((item) => {
+        const firstContact = (item.cons && item.cons[0]) || {};
+        const card = document.createElement('div');
+        card.className = 'kcard ' + (item.status === 'lead' ? 'sl' : item.status === 'prospect' ? 'sp' : 'sw');
+        card.innerHTML =
+          '<div class="kbiz">' + esc(item.biz) + '</div>' +
+          '<div class="kcon">' + esc(firstContact.name || firstContact.email || 'No contact yet') + '</div>' +
+          '<div class="ktype">' + esc(item.type || '') + '</div>' +
+          '<div class="kmeta">' +
+            (item.employees ? '<span class="ktag deal">' + esc(item.employees) + ' employees</span>' : '') +
+            (item.rating ? '<span class="ktag fu">â ' + esc(item.rating) + '</span>' : '') +
+          '</div>' +
+          '<div class="kacts">' +
+            '<button class="kbtn" onclick="advanceStage(\'' + esc(item.id) + '\')">Advance</button>' +
+            (item.web ? '<a class="kbtn" href="' + esc(safeUrl(item.web)) + '" target="_blank" rel="noopener noreferrer">Website</a>' : '') +
+          '</div>';
+        cards.appendChild(card);
+      });
+    }
+
+    col.appendChild(cards);
+    board.appendChild(col);
+  });
+}
+
+function advanceStage(recordId) {
+  const item = crm.find((entry) => entry.id === recordId);
+  if (!item) return;
+  const index = STAGES.findIndex((stage) => stage.key === item.stage);
+  if (index === -1 || index === STAGES.length - 1) return;
+  item.stage = STAGES[index + 1].key;
+  item.status = STAGES[index + 1].status;
+  saveCRM();
+  drawCRM();
+}
+
+document.addEventListener('touchstart', () => {}, { passive: true });
+
+loadCRM();
+drawCRM();
+go('home');
+</script>
+</body>
+</html>
