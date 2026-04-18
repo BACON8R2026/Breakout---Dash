@@ -697,6 +697,58 @@ a { color: inherit; }
 }
 .back-link:hover { color: #e8edf5; }
 
+
+.link-btn {
+  background: transparent;
+  border: none;
+  color: #fb923c;
+  font: inherit;
+  cursor: pointer;
+  padding: 0;
+  text-align: left;
+}
+.link-btn:hover { text-decoration: underline; }
+.muted-btn {
+  background: transparent;
+  border: none;
+  color: #8fa3c0;
+  font: inherit;
+  cursor: pointer;
+  padding: 0;
+}
+.muted-btn:hover { color: #e8edf5; text-decoration: underline; }
+.tasks-list { display:grid; gap:8px; margin-top:10px; }
+.task-row { background:#161e30; border:1px solid rgba(255,255,255,0.07); border-radius:12px; padding:10px; }
+.toast-wrap {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 140;
+  display: grid;
+  gap: 10px;
+}
+.toast {
+  min-width: 260px;
+  max-width: 360px;
+  background: #0f1623;
+  border: 1px solid rgba(52,211,153,0.24);
+  border-radius: 14px;
+  box-shadow: 0 14px 30px rgba(0,0,0,0.35);
+  padding: 14px 14px 12px;
+}
+.toast-title {
+  font-family: 'Syne', sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  color: #34d399;
+  margin-bottom: 4px;
+}
+.toast-body {
+  font-size: 12px;
+  color: #cfd8e6;
+  line-height: 1.45;
+}
+
 @media (max-width: 980px) {
   .dashboard-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
   .results-grid { grid-template-columns: 1fr; }
@@ -1140,6 +1192,8 @@ let handledFilterHidden = true;
 let crmView = 'list';
 let pendingDuplicate = null;
 let activeCrmRecordId = null;
+let currentPhoneValue = '';
+let taskContext = null;
 
 function esc(s){ return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function $(id){ return document.getElementById(id); }
@@ -1168,12 +1222,46 @@ function genId(){
 }
 function closeModal(id){ $(id).classList.remove('open'); }
 function openModal(id){ $(id).classList.add('open'); }
+function showToast(title, body){
+  const wrap = $('toastWrap');
+  const item = document.createElement('div');
+  item.className = 'toast';
+  item.innerHTML = `<div class="toast-title">${esc(title)}</div><div class="toast-body">${esc(body)}</div>`;
+  wrap.appendChild(item);
+  setTimeout(() => item.remove(), 2800);
+}
+function copyText(text, successTitle, successBody){
+  const value = String(text || '');
+  if (!value) return;
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(value).then(() => showToast(successTitle, successBody)).catch(() => fallbackCopy(value, successTitle, successBody));
+  } else {
+    fallbackCopy(value, successTitle, successBody);
+  }
+}
+function fallbackCopy(value, successTitle, successBody){
+  const ta = document.createElement('textarea');
+  ta.value = value;
+  document.body.appendChild(ta);
+  ta.select();
+  try { document.execCommand('copy'); } catch {}
+  ta.remove();
+  showToast(successTitle, successBody);
+}
 
 function loadState(){
   try { crmRecords = JSON.parse(localStorage.getItem(CRM_KEY) || '[]'); } catch { crmRecords = []; }
   try { searchHistory = JSON.parse(localStorage.getItem(SEARCH_HISTORY_KEY) || '[]'); } catch { searchHistory = []; }
   crmRecords = Array.isArray(crmRecords) ? crmRecords : [];
   searchHistory = Array.isArray(searchHistory) ? searchHistory : [];
+  crmRecords.forEach(r => {
+    if (!Array.isArray(r.contacts)) r.contacts = [];
+    r.contacts.forEach(c => {
+      if (!Array.isArray(c.tasks)) c.tasks = [];
+      if (typeof c.notes !== 'string') c.notes = '';
+    });
+    if (!Array.isArray(r.history)) r.history = [];
+  });
 }
 function saveCrm(){ localStorage.setItem(CRM_KEY, JSON.stringify(crmRecords)); }
 function saveSearchHistory(){ localStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(searchHistory)); }
@@ -1374,18 +1462,45 @@ function openContacts(indexOrId, fromCrm){
   if (fromCrm) {
     const record = crmRecords.find(r => r.crmId === indexOrId);
     if (!record) return;
-    $('contactsTitle').textContent = 'Contacts: ' + record.businessName;
-    $('contactsList').innerHTML = (record.contacts || []).map(c => `
+    $('contactsTitle').textContent = 'Contacts';
+    $('contactsList').innerHTML = (record.contacts || []).map((c, idx) => `
       <div class="contact-row">
-        <div style="font-weight:700">${esc(c.name || 'Unnamed')}</div>
-        <div style="font-size:12px;color:#fb923c;margin-top:4px">${esc(c.title || '')}</div>
-        <div style="font-size:12px;color:#cdd6e6;margin-top:4px">${esc(c.email || '')}</div>
+        <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+          <div>
+            <div style="font-weight:700">${esc(c.name || 'Unnamed')}</div>
+            <div style="font-size:12px;color:#fb923c;margin-top:4px">${esc(c.title || '')}</div>
+          </div>
+          <div class="crm-actions">
+            ${c.email ? `<button class="bsm" onclick="openComposeByContact('${record.crmId}', ${idx})">Email</button>` : `<button class="bsm" onclick="openPromptBuilder('${record.crmId}','company_email')">Find Email</button>`}
+            ${c.phone ? `<button class="bsm" onclick="openPhoneModal('${esc(c.phone)}')">Phone</button>` : `<button class="bsm" onclick="openPromptBuilder('${record.crmId}','business_phone')">Find Phone</button>`}
+            <button class="bsm" onclick="setPrimaryContact('${record.crmId}', ${idx})">Set Primary</button>
+            <button class="bsm ok" onclick="openTaskModal('${record.crmId}', ${idx})">Create Task</button>
+          </div>
+        </div>
+        <div style="font-size:12px;color:#cdd6e6;margin-top:8px">${esc(c.email || '')}</div>
         <div style="font-size:12px;color:#8fa3c0;margin-top:4px">${esc(c.phone || '')}</div>
+        <div style="margin-top:10px;">
+          <label class="flabel">Contact Notes</label>
+          <textarea class="crm-textarea" id="contactNotes_${record.crmId}_${idx}">${esc(c.notes || '')}</textarea>
+          <div class="action-row" style="margin-top:8px;">
+            <button class="bsm" onclick="saveContactNotes('${record.crmId}', ${idx})">Save Notes</button>
+          </div>
+        </div>
+        <div class="divider-title">Tasks</div>
+        <div class="tasks-list">
+          ${(c.tasks && c.tasks.length) ? c.tasks.map(t => `
+            <div class="task-row">
+              <div style="font-weight:700">${esc(t.title || '')}</div>
+              <div class="crm-mini">${esc((t.type || '').replace(/_/g,' '))} Â· ${esc(t.dueDate || '')} ${esc(t.dueTime || '')}</div>
+              <div class="crm-mini">${esc(t.notes || '')}</div>
+            </div>
+          `).join('') : '<div class="task-row">No tasks yet</div>'}
+        </div>
       </div>
     `).join('');
   } else {
     const lead = leads[indexOrId];
-    $('contactsTitle').textContent = 'Additional Contacts: ' + lead.name;
+    $('contactsTitle').textContent = 'Additional Contacts';
     $('contactsList').innerHTML = lead.contacts.map(c => `
       <div class="contact-row">
         <div style="font-weight:700">${esc(c.name || 'Unnamed')}</div>
@@ -1417,7 +1532,7 @@ function buildCrmCandidate(lead){
     primaryContactTitle: lead.primaryContactTitle || '',
     primaryContactEmail: lead.primaryContactEmail || '',
     primaryContactPhone: lead.primaryContactPhone || '',
-    contacts: Array.isArray(lead.contacts) ? lead.contacts.slice() : [],
+    contacts: Array.isArray(lead.contacts) ? lead.contacts.map(c => ({ name: c.name || '', title: c.title || '', email: c.email || '', phone: c.phone || '', notes: '', tasks: [] })) : [],
     employees: lead.employees || '',
     revenue: lead.revenue || '',
     status: 'new',
@@ -1481,7 +1596,7 @@ function importLead(index, forceNew = false){
   updateDashboardSummary();
   renderLeads();
   renderCrm();
-  alert('Imported: ' + candidate.businessName);
+  showToast('Success!', 'Imported ' + candidate.businessName + ' into Smart CRM.');
 }
 function resolveDuplicate(mode){
   if (!pendingDuplicate) return;
@@ -1568,6 +1683,7 @@ function renderCrm(){
             <th>Primary Contact</th>
             <th>Company Email</th>
             <th>Business Phone</th>
+            <th>Website</th>
             <th>Industry</th>
             <th>Status</th>
             <th>Last Contact</th>
@@ -1578,10 +1694,11 @@ function renderCrm(){
         <tbody>
           ${records.map(r => `
             <tr>
-              <td><div style="font-weight:700">${esc(r.businessName)}</div><div class="crm-mini">${esc(r.address)}</div></td>
-              <td><div>${esc(r.primaryContactName || 'Not found')}</div><div class="crm-mini">${esc(r.primaryContactTitle || '')}</div></td>
-              <td>${esc(r.companyEmail || '')}</td>
-              <td>${esc(r.businessPhone || '')}</td>
+              <td><button class="link-btn" onclick="openCrmRecord('${r.crmId}')">${esc(r.businessName)}</button><div class="crm-mini">${esc(r.address)}</div></td>
+              <td><div>${renderContactNameAction(r)}</div><div class="crm-mini">${esc(r.primaryContactTitle || '')}</div></td>
+              <td>${renderEmailAction(r.companyEmail, r.crmId, 'company_email')}</td>
+              <td>${renderPhoneAction(r.businessPhone, r.crmId, 'business_phone')}</td>
+              <td>${renderWebsiteLink(r.website) || `<button class="muted-btn" onclick="openPromptBuilder('${r.crmId}','website')">Not found</button>`}</td>
               <td>${esc(r.industry || '')}</td>
               <td>
                 <select class="crm-select" onchange="quickStatusUpdate('${r.crmId}', this.value)">
@@ -1601,21 +1718,21 @@ function renderCrm(){
       <div class="crm-card">
         <div class="crm-head">
           <div>
-            <div class="crm-title">${esc(r.businessName)}</div>
+            <div class="crm-title"><button class="link-btn" onclick="openCrmRecord('${r.crmId}')">${esc(r.businessName)}</button></div>
             <div class="crm-sub">${esc(r.address)}</div>
           </div>
           <div class="badges"><span class="badge">${esc(statusLabel(r.status))}</span></div>
         </div>
         <div class="card-columns">
           <div class="column-stack">
-            <div class="block"><div class="block-label">Primary Contact</div><div class="block-value">${esc(r.primaryContactName || 'Not found')}</div><div class="crm-sub">${esc(r.primaryContactTitle || '')}</div></div>
-            <div class="block"><div class="block-label">Company Email</div><div class="block-value">${esc(r.companyEmail || '')}</div></div>
-            <div class="block"><div class="block-label">Business Phone</div><div class="block-value">${esc(r.businessPhone || '')}</div></div>
+            <div class="block"><div class="block-label">Primary Contact</div><div class="block-value">${renderContactNameAction(r)}</div><div class="crm-sub">${esc(r.primaryContactTitle || '')}</div></div>
+            <div class="block"><div class="block-label">Company Email</div><div class="block-value">${renderEmailAction(r.companyEmail, r.crmId, 'company_email')}</div></div>
+            <div class="block"><div class="block-label">Business Phone</div><div class="block-value">${renderPhoneAction(r.businessPhone, r.crmId, 'business_phone')}</div></div>
           </div>
           <div class="column-stack">
+            <div class="block"><div class="block-label">Website</div><div class="block-value">${renderWebsiteLink(r.website) || `<button class="muted-btn" onclick="openPromptBuilder('${r.crmId}','website')">Not found</button>`}</div></div>
             <div class="block"><div class="block-label">Industry</div><div class="block-value">${esc(r.industry || '')}</div></div>
             <div class="block"><div class="block-label">Next Follow Up</div><div class="block-value">${esc(r.nextFollowUpDate || '')}</div></div>
-            <div class="block"><div class="block-label">Deal Size</div><div class="block-value">${esc(r.estimatedDealSize || '')}</div></div>
           </div>
         </div>
         <div class="action-row">
@@ -1641,6 +1758,7 @@ function quickStatusUpdate(crmId, next){
   renderCrm();
   markLeadHandledStates();
   renderLeads();
+  showToast('Success!', 'Status updated to ' + statusLabel(next) + '.');
 }
 
 function openCrmRecord(crmId){
@@ -1683,11 +1801,159 @@ function saveCrmRecordModal(){
   renderCrm();
   markLeadHandledStates();
   renderLeads();
+  showToast('Success!', 'CRM record saved.');
 }
 function openContactsFromCrm(){
   if (!activeCrmRecordId) return;
   closeModal('crmRecordModalWrap');
   openContacts(activeCrmRecordId, true);
+}
+
+
+function renderWebsiteLink(url){
+  return url ? `<a href="${esc(url)}" target="_blank" class="link-btn">${esc(url.replace(/^https?:\/\//,'').replace(/\/$/,''))}</a>` : '';
+}
+function renderEmailAction(email, crmId, missingField){
+  if (email) return `<button class="link-btn" onclick="openComposeByRecord('${crmId}','${esc(email)}')">${esc(email)}</button>`;
+  return `<button class="muted-btn" onclick="openPromptBuilder('${crmId}','${missingField}')">Not found</button>`;
+}
+function renderPhoneAction(phone, crmId, missingField){
+  if (phone) return `<button class="link-btn" onclick="openPhoneModal('${esc(phone)}')">${esc(phone)}</button>`;
+  return `<button class="muted-btn" onclick="openPromptBuilder('${crmId}','${missingField}')">Not found</button>`;
+}
+function renderContactNameAction(record){
+  if (record.primaryContactName) return `<button class="link-btn" onclick="openCrmRecord('${record.crmId}')">${esc(record.primaryContactName)}</button>`;
+  return `<button class="muted-btn" onclick="openPromptBuilder('${record.crmId}','primary_contact_name')">Not found</button>`;
+}
+function openComposeByRecord(crmId, to){
+  const record = crmRecords.find(r => r.crmId === crmId);
+  $('composeTo').value = to || '';
+  $('composeSubject').value = record ? 'Quick note from ' + record.businessName : '';
+  $('composeBody').value = '';
+  openModal('composeModalWrap');
+}
+function openComposeByContact(crmId, index){
+  const record = crmRecords.find(r => r.crmId === crmId);
+  if (!record) return;
+  const c = record.contacts[index];
+  $('composeTo').value = c.email || '';
+  $('composeSubject').value = 'Quick note from ' + record.businessName;
+  $('composeBody').value = '';
+  openModal('composeModalWrap');
+}
+function copyComposeDraft(){
+  const draft = ['To: ' + compact($('composeTo').value), 'Subject: ' + compact($('composeSubject').value), '', compact($('composeBody').value)].join('
+');
+  copyText(draft, 'Success!', 'Email draft copied.');
+}
+function openPhoneModal(phone){
+  currentPhoneValue = String(phone || '');
+  $('phoneModalSub').textContent = 'Choose what you want to do with ' + currentPhoneValue + '.';
+  $('phoneCallLink').href = 'tel:' + currentPhoneValue;
+  $('phoneTextLink').href = 'sms:' + currentPhoneValue;
+  openModal('phoneModalWrap');
+}
+function copyPhoneNumber(){ copyText(currentPhoneValue, 'Success!', 'Phone number copied.'); }
+function fieldPromptLabel(kind){ return { company_email:'company email', business_phone:'business phone', primary_contact_name:'primary contact', website:'website' }[kind] || kind; }
+function openPromptBuilder(crmId, kind){
+  const record = crmRecords.find(r => r.crmId === crmId);
+  if (!record) return;
+  const prompt = [
+    'Research this business and find the best public information for the missing field.',
+    '',
+    'Business name: ' + (record.businessName || ''),
+    'Address: ' + (record.address || ''),
+    'City: ' + (record.city || ''),
+    'State: ' + (record.state || ''),
+    'Website: ' + (record.website || ''),
+    'Business phone: ' + (record.businessPhone || ''),
+    'Industry: ' + (record.industry || ''),
+    '',
+    'Missing field to find: ' + fieldPromptLabel(kind),
+    '',
+    'Return in this exact format:',
+    'Business Name:',
+    'Primary Contact Name:',
+    'Primary Contact Title:',
+    'Primary Contact Email:',
+    'Primary Contact Phone:',
+    'Company Email:',
+    'Website:',
+    'Source Notes:',
+    '',
+    'Rules:',
+    'Only use public information.',
+    'Do not guess.',
+    'If a field cannot be found, leave it blank.'
+  ].join('
+');
+  $('promptBuilderText').value = prompt;
+  openModal('promptModalWrap');
+}
+function copyPromptText(){ copyText($('promptBuilderText').value, 'Success!', 'AI research prompt copied.'); }
+function saveContactNotes(crmId, index){
+  const record = crmRecords.find(r => r.crmId === crmId);
+  if (!record) return;
+  const key = 'contactNotes_' + crmId + '_' + index;
+  record.contacts[index].notes = compact($(key).value);
+  record.updatedAt = nowIso();
+  record.history.unshift(crmHistoryEntry('contact', 'Contact notes updated for ' + (record.contacts[index].name || 'contact')));
+  saveCrm();
+  showToast('Success!', 'Contact notes saved.');
+}
+function setPrimaryContact(crmId, index){
+  const record = crmRecords.find(r => r.crmId === crmId);
+  if (!record) return;
+  const c = record.contacts[index];
+  record.primaryContactName = c.name || '';
+  record.primaryContactTitle = c.title || '';
+  record.primaryContactEmail = c.email || '';
+  record.primaryContactPhone = c.phone || '';
+  record.updatedAt = nowIso();
+  record.history.unshift(crmHistoryEntry('contact', 'Primary contact changed to ' + (c.name || 'contact')));
+  saveCrm();
+  closeModal('contactsModalWrap');
+  renderCrm();
+  showToast('Success!', 'Primary contact updated.');
+}
+function openTaskModal(crmId, index){
+  const record = crmRecords.find(r => r.crmId === crmId);
+  if (!record) return;
+  const c = record.contacts[index];
+  taskContext = { crmId, index };
+  $('taskModalSub').textContent = 'Create a follow up task for ' + (c.name || record.businessName) + '.';
+  $('taskTitle').value = 'Follow up with ' + (c.name || record.businessName);
+  $('taskType').value = 'follow_up';
+  $('taskDueDate').value = '';
+  $('taskDueTime').value = '';
+  $('taskOwner').value = record.leadOwner || '';
+  $('taskPriority').value = '';
+  $('taskNotes').value = '';
+  openModal('taskModalWrap');
+}
+function saveContactTask(){
+  if (!taskContext) return;
+  const record = crmRecords.find(r => r.crmId === taskContext.crmId);
+  if (!record) return;
+  const c = record.contacts[taskContext.index];
+  if (!Array.isArray(c.tasks)) c.tasks = [];
+  c.tasks.unshift({
+    title: compact($('taskTitle').value),
+    type: compact($('taskType').value),
+    dueDate: compact($('taskDueDate').value),
+    dueTime: compact($('taskDueTime').value),
+    owner: compact($('taskOwner').value),
+    priority: compact($('taskPriority').value),
+    notes: compact($('taskNotes').value),
+    createdAt: nowIso()
+  });
+  record.updatedAt = nowIso();
+  record.history.unshift(crmHistoryEntry('task', 'Task created for ' + (c.name || 'contact')));
+  saveCrm();
+  closeModal('taskModalWrap');
+  closeModal('contactsModalWrap');
+  openContacts(taskContext.crmId, true);
+  showToast('Success!', 'Follow up task created.');
 }
 
 function updateDashboardSummary(){
@@ -1799,5 +2065,99 @@ loadState();
 updateDashboardSummary();
 showView('home');
 </script>
+
+<div class="modal-backdrop" id="composeModalWrap">
+  <div class="modal">
+    <h3>Compose Email</h3>
+    <div class="modal-sub">Draft inside the app. You can copy it or use it in your email workflow.</div>
+    <div class="row2">
+      <div><label class="flabel">To</label><input class="edit-input" id="composeTo"></div>
+      <div><label class="flabel">Subject</label><input class="edit-input" id="composeSubject"></div>
+    </div>
+    <div>
+      <label class="flabel">Message</label>
+      <textarea class="crm-textarea" id="composeBody"></textarea>
+    </div>
+    <div class="action-row" style="margin-top:12px;">
+      <button class="bsm" onclick="closeModal('composeModalWrap')">Close</button>
+      <button class="bsm ok" onclick="copyComposeDraft()">Copy Draft</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="phoneModalWrap">
+  <div class="modal">
+    <h3>Phone Actions</h3>
+    <div class="modal-sub" id="phoneModalSub">Choose what you want to do with this number.</div>
+    <div class="action-row" style="margin-top:8px;">
+      <a class="bsm ok" id="phoneCallLink" href="#">Call</a>
+      <a class="bsm ora" id="phoneTextLink" href="#">Text</a>
+      <button class="bsm" onclick="copyPhoneNumber()">Copy Number</button>
+      <button class="bsm" onclick="closeModal('phoneModalWrap')">Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="promptModalWrap">
+  <div class="modal">
+    <h3>AI Research Prompt</h3>
+    <div class="modal-sub">Copy this prompt into ChatGPT or another AI tool and paste the result back into CRM.</div>
+    <div>
+      <label class="flabel">Prompt</label>
+      <textarea class="crm-textarea" id="promptBuilderText"></textarea>
+    </div>
+    <div class="action-row" style="margin-top:12px;">
+      <button class="bsm" onclick="closeModal('promptModalWrap')">Close</button>
+      <button class="bsm ok" onclick="copyPromptText()">Copy Prompt</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="taskModalWrap">
+  <div class="modal">
+    <h3>Create Task</h3>
+    <div class="modal-sub" id="taskModalSub">Create a follow up task for this contact.</div>
+    <div class="row2">
+      <div><label class="flabel">Task Title</label><input class="edit-input" id="taskTitle"></div>
+      <div><label class="flabel">Task Type</label>
+        <select class="crm-select" id="taskType">
+          <option value="follow_up">Follow Up</option>
+          <option value="call">Call</option>
+          <option value="text">Text</option>
+          <option value="email">Email</option>
+          <option value="research">Research</option>
+          <option value="meeting_prep">Meeting Prep</option>
+          <option value="custom">Custom</option>
+        </select>
+      </div>
+    </div>
+    <div class="row2">
+      <div><label class="flabel">Due Date</label><input class="edit-input" id="taskDueDate" type="date"></div>
+      <div><label class="flabel">Due Time</label><input class="edit-input" id="taskDueTime" type="time"></div>
+    </div>
+    <div class="row2">
+      <div><label class="flabel">Owner</label><input class="edit-input" id="taskOwner" placeholder="Dave, Celine"></div>
+      <div><label class="flabel">Priority</label>
+        <select class="crm-select" id="taskPriority">
+          <option value="">None</option>
+          <option value="high">High</option>
+          <option value="medium">Medium</option>
+          <option value="low">Low</option>
+        </select>
+      </div>
+    </div>
+    <div>
+      <label class="flabel">Notes</label>
+      <textarea class="crm-textarea" id="taskNotes"></textarea>
+    </div>
+    <div class="action-row" style="margin-top:12px;">
+      <button class="bsm" onclick="closeModal('taskModalWrap')">Close</button>
+      <button class="bsm ok" onclick="saveContactTask()">Create Task</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast-wrap" id="toastWrap"></div>
+
 </body>
 </html>
