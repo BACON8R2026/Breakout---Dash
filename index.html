@@ -381,8 +381,10 @@ a { color: inherit; text-decoration: none; }
 
 <script>
 const API = 'https://project-creator-BACON8R2026.replit.app';
-const CRM_KEY = 'bai_crm_records_v4_fix';
-const SEARCH_HISTORY_KEY = 'bai_search_history_v4_fix';
+const CRM_KEY = 'bai_crm_records_master';
+const SEARCH_HISTORY_KEY = 'bai_search_history_master';
+const LEGACY_CRM_KEYS = ['bai_crm_records_master','bai_crm_records_v4_fix','bai_crm_records_v4','bai_crm_records_v3','bai_crm_records_v2','bai_crm_records'];
+const LEGACY_HISTORY_KEYS = ['bai_search_history_master','bai_search_history_v4_fix','bai_search_history_v4','bai_search_history_v3','bai_search_history'];
 let currentView = 'home';
 let leads = [];
 let crmRecords = [];
@@ -412,9 +414,54 @@ function fallbackCopy(value){ const ta = document.createElement('textarea'); ta.
 function copyText(value, title, body){ const v = String(value || ''); if (!v) return; if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(v).then(() => showToast(title, body)).catch(() => { fallbackCopy(v); showToast(title, body); }); } else { fallbackCopy(v); showToast(title, body); } }
 function showToast(title, body){ const wrap = $('toastWrap'); const item = document.createElement('div'); item.className = 'toast'; item.innerHTML = '<div class="toast-title">' + esc(title) + '</div><div class="toast-body">' + esc(body) + '</div>'; wrap.appendChild(item); setTimeout(() => item.remove(), 2800); }
 
+function safeReadArray(key){
+  try {
+    const raw = localStorage.getItem(key);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+function mergeCrmRecords(records){
+  const merged = [];
+  const seen = new Set();
+  for (const record of records) {
+    if (!record || typeof record !== 'object') continue;
+    const placeId = compact(record.placeId || '');
+    const domain = compact(record.domain || '').toLowerCase();
+    const phone = digitsOnly(record.businessPhone || record.phone || '');
+    const nameCity = (normalizeName(record.businessName || record.name || '') + '|' + compact(record.city || '').toLowerCase()).trim();
+    const key = placeId ? 'p:' + placeId : domain ? 'd:' + domain : phone ? 'ph:' + phone : nameCity ? 'n:' + nameCity : '';
+    if (key && seen.has(key)) continue;
+    if (key) seen.add(key);
+    merged.push(record);
+  }
+  return merged;
+}
+function mergeSearchHistory(records){
+  const seen = new Set();
+  const merged = [];
+  for (const item of records) {
+    if (!item || typeof item !== 'object') continue;
+    const key = [compact(item.at), compact(item.type), compact(item.city), String(item.count || '')].join('|');
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push(item);
+  }
+  merged.sort((a, b) => new Date(b.at || 0) - new Date(a.at || 0));
+  return merged;
+}
+function migrateLocalStorage(){
+  const crmArrays = LEGACY_CRM_KEYS.map(safeReadArray);
+  const historyArrays = LEGACY_HISTORY_KEYS.map(safeReadArray);
+  crmRecords = mergeCrmRecords(crmArrays.flat());
+  searchHistory = mergeSearchHistory(historyArrays.flat());
+  localStorage.setItem(CRM_KEY, JSON.stringify(crmRecords));
+  localStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(searchHistory));
+}
 function loadState(){
-  try { crmRecords = JSON.parse(localStorage.getItem(CRM_KEY) || '[]'); } catch { crmRecords = []; }
-  try { searchHistory = JSON.parse(localStorage.getItem(SEARCH_HISTORY_KEY) || '[]'); } catch { searchHistory = []; }
+  migrateLocalStorage();
   if (!Array.isArray(crmRecords)) crmRecords = [];
   if (!Array.isArray(searchHistory)) searchHistory = [];
   crmRecords.forEach(r => {
