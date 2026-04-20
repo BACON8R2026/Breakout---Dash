@@ -113,6 +113,13 @@ a { color: inherit; text-decoration: none; }
   color: #fca5a5;
 }
 
+.marketing-summary { display:flex; align-items:center; gap:0; background:#0f1623; border:1px solid rgba(255,255,255,0.07); border-radius:14px; margin-bottom:14px; overflow:auto; }
+.marketing-summary-box { flex:1; min-width:120px; text-align:center; padding:12px 8px; }
+.marketing-summary-box strong { display:block; font-family:'Syne', sans-serif; font-size:22px; color:#fb923c; }
+.marketing-summary-box span { display:block; font-size:10px; color:#4a6080; text-transform:uppercase; letter-spacing:.5px; }
+.marketing-summary-div { width:1px; height:32px; background: rgba(255,255,255,0.08); flex-shrink:0; }
+.frontend-ready-tag { display:inline-flex; align-items:center; gap:6px; padding:4px 9px; border-radius:999px; font-size:10px; font-weight:700; letter-spacing:.6px; text-transform:uppercase; color:#fb923c; border:1px solid rgba(249,115,22,0.22); background:rgba(249,115,22,0.08); }
+
 .row2 { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
 .row2 > * { flex: 1; min-width: 170px; }
 .flabel { display: block; font-size: 11px; color: #8fa3c0; margin-bottom: 5px; }
@@ -208,6 +215,7 @@ a { color: inherit; text-decoration: none; }
       <button class="top-link" id="topLeads" onclick="enterStation('leads')">Find Leads</button>
       <button class="top-link">SEO+AEO</button>
       <button class="top-link" id="topCrm" onclick="enterStation('crm')">Smart CRM</button>
+      <button class="top-link" id="topMarketing" onclick="enterStation('marketing')">Marketing</button>
       <button class="top-link">Phone Agent</button>
       <button class="top-link">Proposals</button>
       <button class="top-link">Contracts</button>
@@ -269,6 +277,23 @@ a { color: inherit; text-decoration: none; }
               <div class="station-mini"><strong id="stationCrmEmailed">0</strong><span>Emailed</span></div>
               <div class="station-mini"><strong id="stationCrmCalled">0</strong><span>Called or texted</span></div>
               <div class="station-mini"><strong id="stationCrmInterested">0</strong><span>Interested</span></div>
+            </div>
+          </div>
+        </button>
+
+        <button class="station-card live" onclick="enterStation('marketing')">
+          <div>
+            <div class="station-icon">&#128227;</div>
+            <div class="station-title">Marketing</div>
+            <div class="station-desc">Create campaigns, offers, and content across social, ads, newsletters, and landing pages.</div>
+            <div class="station-tag live">Live</div>
+          </div>
+          <div class="station-bottom">
+            <div class="station-mini-grid">
+              <div class="station-mini"><strong>3</strong><span>Social</span></div>
+              <div class="station-mini"><strong>2</strong><span>Ads</span></div>
+              <div class="station-mini"><strong>4</strong><span>Newsletters</span></div>
+              <div class="station-mini"><strong>5</strong><span>Offers</span></div>
             </div>
           </div>
         </button>
@@ -390,6 +415,37 @@ a { color: inherit; text-decoration: none; }
       <div id="crmCardsWrap" class="results-grid"></div>
       </div>
     </div>
+
+    <div id="viewMarketing" class="hidden">
+      <div id="marketingStationPanel" class="station-panel centered-mode">
+      <div class="back-row">
+        <div class="back-link" onclick="showView('home')">&larr; Back to overview</div>
+        <div class="controls">
+          <button class="bsm" onclick="setMarketingView('list')">List View</button>
+          <button class="bsm" onclick="setMarketingView('cards')">Card View</button>
+        </div>
+      </div>
+
+      <div class="section-wrap">
+        <div class="section-head">
+          <div><div class="section-title">Marketing</div><div class="section-sub">Build and manage social media, ad campaigns, newsletters, offers, and landing page content.</div></div>
+        </div>
+      </div>
+
+      <div class="marketing-summary">
+        <div class="marketing-summary-box"><strong>3</strong><span>Social</span></div>
+        <div class="marketing-summary-div"></div>
+        <div class="marketing-summary-box"><strong>2</strong><span>Ads</span></div>
+        <div class="marketing-summary-div"></div>
+        <div class="marketing-summary-box"><strong>4</strong><span>Newsletters</span></div>
+        <div class="marketing-summary-div"></div>
+        <div class="marketing-summary-box"><strong>5</strong><span>Offers</span></div>
+      </div>
+
+      <div id="marketingListWrap" class="list-wrap hidden"></div>
+      <div id="marketingCardsWrap" class="results-grid"></div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -455,6 +511,7 @@ let activeEditIndex = -1;
 let handledFilterHidden = true;
 let leadView = 'cards';
 let crmView = 'cards';
+let marketingView = 'cards';
 let pendingDuplicate = null;
 let activeCrmRecordId = null;
 let currentPhoneValue = '';
@@ -463,6 +520,44 @@ let activeComposeCrmId = '';
 let activePhoneCrmId = '';
 let activePromptCrmId = '';
 let activeQuickFilter = '';
+
+const marketingModules = [
+  {
+    key: 'social',
+    title: 'Social Media',
+    desc: 'Draft and organize social content ideas, captions, and platform specific posting flows.',
+    mini1: '12 captions',
+    mini2: '5 channels'
+  },
+  {
+    key: 'ads',
+    title: 'Ad Campaigns',
+    desc: 'Shape ad concepts, messaging angles, and campaign structure for paid traffic.',
+    mini1: '8 angles',
+    mini2: '2 campaigns'
+  },
+  {
+    key: 'newsletter',
+    title: 'Newsletter',
+    desc: 'Build newsletter ideas, sections, and campaign draft flow from source materials.',
+    mini1: '4 drafts',
+    mini2: '1 live first'
+  },
+  {
+    key: 'offers',
+    title: 'Offers',
+    desc: 'Create and organize offers, promotions, and campaign hooks.',
+    mini1: '5 offers',
+    mini2: '3 hooks'
+  },
+  {
+    key: 'landing_pages',
+    title: 'Landing Pages',
+    desc: 'Outline landing page copy, messaging blocks, and section structure.',
+    mini1: '6 sections',
+    mini2: '2 outlines'
+  }
+];
 
 function esc(s){ return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function compact(v){ return String(v || '').trim(); }
@@ -543,7 +638,8 @@ function updateShellLayout(){
   const shell = document.querySelector('.shell');
   const leadsPanel = $('leadsStationPanel');
   const crmPanel = $('crmStationPanel');
-  const needsWide = (currentView === 'leads' && leadView === 'list') || (currentView === 'crm' && crmView === 'list');
+  const marketingPanel = $('marketingStationPanel');
+  const needsWide = (currentView === 'leads' && leadView === 'list') || (currentView === 'crm' && crmView === 'list') || (currentView === 'marketing' && marketingView === 'list');
   if (shell) shell.classList.toggle('wide-list-shell', needsWide);
   if (leadsPanel) {
     leadsPanel.classList.toggle('list-mode', currentView === 'leads' && leadView === 'list');
@@ -553,21 +649,29 @@ function updateShellLayout(){
     crmPanel.classList.toggle('list-mode', currentView === 'crm' && crmView === 'list');
     crmPanel.classList.toggle('centered-mode', !(currentView === 'crm' && crmView === 'list'));
   }
+  if (marketingPanel) {
+    marketingPanel.classList.toggle('list-mode', currentView === 'marketing' && marketingView === 'list');
+    marketingPanel.classList.toggle('centered-mode', !(currentView === 'marketing' && marketingView === 'list'));
+  }
 }
 function showView(view){
   currentView = view;
   $('viewHome').classList.toggle('hidden', view !== 'home');
   $('viewLeads').classList.toggle('hidden', view !== 'leads');
   $('viewCrm').classList.toggle('hidden', view !== 'crm');
+  $('viewMarketing').classList.toggle('hidden', view !== 'marketing');
   $('topHome').classList.toggle('active', view === 'home');
   $('topLeads').classList.toggle('active', view === 'leads');
   $('topCrm').classList.toggle('active', view === 'crm');
+  $('topMarketing').classList.toggle('active', view === 'marketing');
   updateShellLayout();
   if (view === 'leads') renderLeads();
   if (view === 'crm') renderCrm();
+  if (view === 'marketing') renderMarketing();
 }
 function enterStation(name){ showView(name); }
 function setLeadView(next){ leadView = next; updateShellLayout(); renderLeads(); }
+function setMarketingView(next){ marketingView = next; updateShellLayout(); renderMarketing(); }
 
 function setProgress(pct, stage, sub){ $('progressPct').textContent = pct + '%'; $('progressStage').textContent = stage; $('progressSub').textContent = sub; $('progressFill').style.width = pct + '%'; }
 function startProgress(){
@@ -689,6 +793,41 @@ function renderLeads(){
   }
   summaryCounts(shown);
   updateDashboardSummary();
+}
+
+function buildMarketingCard(module){
+  return '<div class="crm-card">' +
+    '<div class="crm-head"><div><div class="crm-title">' + esc(module.title) + '</div><div class="crm-sub">' + esc(module.desc) + '</div></div><div class="badges"><span class="frontend-ready-tag">Front End Ready</span></div></div>' +
+    '<div class="card-columns"><div class="column-stack">' +
+    '<div class="block"><div class="block-label">Module</div><div class="block-value">' + esc(module.title) + '</div></div>' +
+    '<div class="block"><div class="block-label">Purpose</div><div class="block-value">' + esc(module.desc) + '</div></div>' +
+    '</div><div class="column-stack">' +
+    '<div class="block"><div class="block-label">Mini Stat</div><div class="block-value">' + esc(module.mini1) + '</div></div>' +
+    '<div class="block"><div class="block-label">Mini Stat</div><div class="block-value">' + esc(module.mini2) + '</div></div>' +
+    '</div></div>' +
+    '<div class="action-row"><button class="bsm" onclick="openMarketingPlaceholder(\'' + module.key + '\')">Open</button><button class="bsm ora" onclick="previewMarketingFlow(\'' + module.key + '\')">Preview Flow</button></div>' +
+    '</div>';
+}
+function renderMarketing(){
+  const listWrap = $('marketingListWrap');
+  const cardsWrap = $('marketingCardsWrap');
+  listWrap.classList.toggle('hidden', marketingView !== 'list');
+  cardsWrap.classList.toggle('hidden', marketingView !== 'cards');
+  if (marketingView === 'cards') {
+    cardsWrap.innerHTML = marketingModules.map(buildMarketingCard).join('');
+  } else {
+    listWrap.innerHTML = '<table class="crm-table"><thead><tr><th>Module</th><th>Purpose</th><th>Status</th><th>Actions</th></tr></thead><tbody>' + marketingModules.map(m => '<tr><td><div style="font-weight:700">' + esc(m.title) + '</div></td><td>' + esc(m.desc) + '</td><td><span class="frontend-ready-tag">Front End Ready</span></td><td><div class="crm-actions"><button class="bsm" onclick="openMarketingPlaceholder(\'' + m.key + '\')">Open</button><button class="bsm ora" onclick="previewMarketingFlow(\'' + m.key + '\')">Preview Flow</button></div></td></tr>').join('') + '</tbody></table>';
+  }
+}
+function openMarketingPlaceholder(kind){
+  const module = marketingModules.find(m => m.key === kind);
+  const title = module ? module.title : 'Module';
+  showToast('Success!', title + ' module is front end ready. Backend comes in phase two.');
+}
+function previewMarketingFlow(kind){
+  const module = marketingModules.find(m => m.key === kind);
+  const title = module ? module.title : 'Module';
+  showToast('Success!', title + ' preview flow is ready for backend wiring next.');
 }
 
 function openEdit(index){
