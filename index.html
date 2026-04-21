@@ -431,7 +431,7 @@ a { color: inherit; text-decoration: none; }
         </div>
         <div class="row2">
           <div><label class="flabel">Filter by Status</label>
-            <select class="sel" id="crmStatusFilter" onchange="renderCrm()">
+            <select class="sel" id="crmStatusFilter" onchange="activeCrmThumbRecordId=''; renderCrm()">
               <option value="">All</option>
               <option value="new">New</option>
               <option value="emailed">Emailed</option>
@@ -447,7 +447,7 @@ a { color: inherit; text-decoration: none; }
               <option value="closed_lost">Closed Lost</option>
             </select>
           </div>
-          <div><label class="flabel">Search CRM</label><input class="inp" id="crmSearch" placeholder="Business, contact, email, phone" oninput="renderCrm()"></div>
+          <div><label class="flabel">Search CRM</label><input class="inp" id="crmSearch" placeholder="Business, contact, email, phone" oninput="activeCrmThumbRecordId=''; renderCrm()"></div>
         </div>
       </div>
 
@@ -465,6 +465,12 @@ a { color: inherit; text-decoration: none; }
       </div>
 
       <div id="crmThumbStrip" class="crm-thumb-strip"></div>
+      <div class="back-row hidden" id="crmFocusedBackRow" style="margin-top:6px;">
+        <div class="controls">
+          <button class="bsm" onclick="clearCrmThumbnailFocus()">Back to All Contacts</button>
+        </div>
+        <div></div>
+      </div>
       <div class="back-row" style="margin-top:6px;">
         <div></div>
         <div class="controls">
@@ -590,6 +596,7 @@ let activeQuickFilter = '';
 let selectedLeadIds = [];
 let pendingQualifiedImportIndexes = [];
 let activeLeadSummaryFilter = '';
+let activeCrmThumbRecordId = '';
 
 const marketingModules = [
   {
@@ -1541,7 +1548,7 @@ function updateCrmViewButtons(){
   if (listBtn) listBtn.className = crmView === 'list' ? 'bsm ora' : 'bsm';
   if (cardBtn) cardBtn.className = crmView === 'cards' ? 'bsm ora' : 'bsm';
 }
-function setCrmView(next){ crmView = next; updateShellLayout(); updateCrmViewButtons(); renderCrm(); }
+function setCrmView(next){ crmView = next; if (next !== 'cards') activeCrmThumbRecordId = ''; updateShellLayout(); updateCrmViewButtons(); renderCrm(); }
 function setQuickCrmFilter(value){
   activeQuickFilter = value;
   updateQuickFilterPills();
@@ -1587,6 +1594,7 @@ function filteredCrmRecords(){
   const status = $('crmStatusFilter').value;
   const q = compact($('crmSearch').value).toLowerCase();
   return crmRecords.filter(r => {
+    if (activeCrmThumbRecordId && r.crmId !== activeCrmThumbRecordId) return false;
     if (status && r.status !== status) return false;
     if (activeQuickFilter && r.status !== activeQuickFilter) return false;
     if (q) {
@@ -1603,7 +1611,12 @@ function crmStatusBadgeClass(status){
   return 'badge';
 }
 function openCrmThumbnail(crmId){
-  const runOpen = () => {
+  activeCrmThumbRecordId = crmId;
+  if (crmView !== 'cards') crmView = 'cards';
+  updateShellLayout();
+  updateCrmViewButtons();
+  renderCrm();
+  setTimeout(() => {
     const target = document.getElementById('crmCard_' + crmId);
     if (!target) return;
     target.scrollIntoView({ behavior:'smooth', block:'start' });
@@ -1613,13 +1626,7 @@ function openCrmThumbnail(crmId){
       target.style.borderColor = '';
       target.style.boxShadow = '';
     }, 1800);
-  };
-  if (crmView !== 'cards') {
-    setCrmView('cards');
-    setTimeout(runOpen, 180);
-  } else {
-    runOpen();
-  }
+  }, 120);
 }
 function stopThumbClick(event){
   if (event) {
@@ -1651,13 +1658,20 @@ function renderCrmThumbStrip(records){
     '<div class="' + crmStatusBadgeClass(r.status) + ' crm-thumb-status">' + esc(statusLabel(r.status || 'new')) + '</div>' +
     '</div>').join('');
 }
+function clearCrmThumbnailFocus(){
+  activeCrmThumbRecordId = '';
+  renderCrm();
+}
+
 function renderCrm(){
   const records = filteredCrmRecords();
   updateQuickFilterPills();
   updateCrmQuickFilterCounts();
   const thumbStrip = $('crmThumbStrip');
-  if (thumbStrip) thumbStrip.classList.toggle('hidden', crmView !== 'cards');
-  renderCrmThumbStrip(records);
+  const focusedBackRow = $('crmFocusedBackRow');
+  if (thumbStrip) thumbStrip.classList.toggle('hidden', crmView !== 'cards' || !!activeCrmThumbRecordId);
+  if (focusedBackRow) focusedBackRow.classList.toggle('hidden', !activeCrmThumbRecordId);
+  renderCrmThumbStrip(activeCrmThumbRecordId ? crmRecords.filter(r => r.crmId !== activeCrmThumbRecordId) : records);
   $('crmListWrap').classList.toggle('hidden', crmView !== 'list');
   $('crmCardsWrap').classList.toggle('hidden', crmView !== 'cards');
 
