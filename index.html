@@ -161,6 +161,8 @@ a { color: inherit; text-decoration: none; }
 .ebar { display:none; padding: 12px 14px; background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.25); border-radius: 10px; color: #fca5a5; margin-bottom: 12px; }
 .summary { display:none; align-items:center; gap:0; background: rgba(52,211,153,0.07); border: 1px solid rgba(52,211,153,0.2); border-radius: 14px; margin-bottom: 14px; overflow: auto; }
 .summary-box { flex:1; min-width:120px; text-align:center; padding:12px 8px; }
+.summary-box.clickable { cursor:pointer; }
+.summary-box.clickable:hover { background: rgba(52,211,153,0.06); }
 .summary-box strong { display:block; font-family: 'Syne', sans-serif; font-size: 22px; color:#34d399; }
 .summary-box span { display:block; font-size:10px; color:#4a6080; text-transform:uppercase; letter-spacing:.5px; }
 .summary-div { width:1px; height:32px; background: rgba(52,211,153,0.18); flex-shrink:0; }
@@ -379,7 +381,7 @@ a { color: inherit; text-decoration: none; }
         <div class="summary-div"></div>
         <div class="summary-box"><strong id="sumContacts">0</strong><span>Contacts</span></div>
         <div class="summary-div"></div>
-        <div class="summary-box"><strong id="sumAi">0</strong><span>AI Enriched</span></div>
+        <div class="summary-box clickable" id="qualifiedImportBox" onclick="promptImportQualifiedLeads()"><strong id="sumQualified">0</strong><span>Green Check Ready</span></div>
       </div>
 
       <div class="list-wrap hidden" id="leadListWrap"></div>
@@ -889,12 +891,52 @@ function qualifiesLeadForQuickImport(item){
 function titleWithCheck(title, item){
   return esc(title || '') + (qualifiesLeadForQuickImport(item) ? '<span class="title-check">&#10003;</span>' : '');
 }
+function getQualifiedVisibleLeadIndexes(){
+  return visibleLeads().map(lead => leads.indexOf(lead)).filter(idx => idx >= 0 && qualifiesLeadForQuickImport(leads[idx]));
+}
+function promptImportQualifiedLeads(){
+  const qualifiedIndexes = getQualifiedVisibleLeadIndexes();
+  if (!qualifiedIndexes.length) {
+    showToast('Heads up', 'No green check leads are ready to import right now.');
+    return;
+  }
+  const ok = window.confirm('Import ' + qualifiedIndexes.length + ' green check leads now?');
+  if (!ok) return;
+  importQualifiedLeads(qualifiedIndexes);
+}
+function importQualifiedLeads(indexes){
+  const queue = Array.isArray(indexes) ? [...indexes] : [];
+  let imported = 0;
+  while (queue.length) {
+    const idx = queue.shift();
+    const lead = leads[idx];
+    if (!lead || !qualifiesLeadForQuickImport(lead)) continue;
+    const candidate = buildCrmCandidate(lead);
+    const dup = findDuplicate(candidate);
+    if (dup) {
+      Object.assign(dup.record, candidate, { crmId: dup.record.crmId, history: dup.record.history });
+      dup.record.updatedAt = nowIso();
+      dup.record.history.unshift(crmHistoryEntry('updated', 'Updated from green check quick import'));
+    } else {
+      crmRecords.unshift(candidate);
+      imported += 1;
+    }
+    lead.handledState = 'in_crm';
+  }
+  saveCrm();
+  markLeadHandledStates();
+  saveCurrentLeadsState();
+  updateDashboardSummary();
+  renderLeads();
+  renderCrm();
+  showToast('Success!', imported ? imported + ' green check leads imported.' : 'Qualified leads were already in Smart CRM and were updated.');
+}
 function summaryCounts(arr){
   $('sumTotal').textContent = String(arr.length);
   $('sumWebsite').textContent = String(arr.filter(x => !!x.website).length);
   $('sumEmail').textContent = String(arr.filter(x => !!x.companyEmail).length);
   $('sumContacts').textContent = String(arr.reduce((n, x) => n + x.contacts.length, 0));
-  $('sumAi').textContent = String(arr.filter(x => x.enrichmentSource === 'openai').length);
+  $('sumQualified').textContent = String(arr.filter(x => qualifiesLeadForQuickImport(x)).length);
   $('summaryBar').style.display = 'flex';
 }
 function buildLeadListRow(lead, realIndex){
