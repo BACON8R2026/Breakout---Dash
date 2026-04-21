@@ -521,7 +521,11 @@ a { color: inherit; text-decoration: none; }
 <div class="action-row" style="margin-top:12px;"><button class="bsm" onclick="closeModal('taskModalWrap')">Close</button><button class="bsm ok" onclick="saveContactTask()">Create Task</button></div>
 </div></div>
 
+
+<div class="modal-backdrop" id="qualifiedImportModalWrap"><div class="modal"><h3>Import Green Check Leads</h3><div class="modal-sub" id="qualifiedImportModalSub">These leads are ready to import.</div><div class="action-row" style="margin-top:12px;"><button class="bsm" onclick="closeModal('qualifiedImportModalWrap')">Cancel</button><button class="bsm ok" onclick="confirmQualifiedLeadImport()">Import Now</button></div></div></div>
+
 <div class="toast-wrap" id="toastWrap"></div>
+
 
 <script>
 const API = 'https://project-creator-BACON8R2026.replit.app';
@@ -550,6 +554,7 @@ let activePhoneCrmId = '';
 let activePromptCrmId = '';
 let activeQuickFilter = '';
 let selectedLeadIds = [];
+let pendingQualifiedImportIndexes = [];
 
 const marketingModules = [
   {
@@ -900,13 +905,20 @@ function promptImportQualifiedLeads(){
     showToast('Heads up', 'No green check leads are ready to import right now.');
     return;
   }
-  const ok = window.confirm('Import ' + qualifiedIndexes.length + ' green check leads now?');
-  if (!ok) return;
-  importQualifiedLeads(qualifiedIndexes);
+  pendingQualifiedImportIndexes = [...qualifiedIndexes];
+  $('qualifiedImportModalSub').textContent = 'Import ' + qualifiedIndexes.length + ' green check leads now? Duplicate checks will still run first.';
+  openModal('qualifiedImportModalWrap');
+}
+function confirmQualifiedLeadImport(){
+  const indexes = Array.isArray(pendingQualifiedImportIndexes) ? [...pendingQualifiedImportIndexes] : [];
+  pendingQualifiedImportIndexes = [];
+  closeModal('qualifiedImportModalWrap');
+  importQualifiedLeads(indexes);
 }
 function importQualifiedLeads(indexes){
   const queue = Array.isArray(indexes) ? [...indexes] : [];
   let imported = 0;
+  let updated = 0;
   while (queue.length) {
     const idx = queue.shift();
     const lead = leads[idx];
@@ -917,6 +929,7 @@ function importQualifiedLeads(indexes){
       Object.assign(dup.record, candidate, { crmId: dup.record.crmId, history: dup.record.history });
       dup.record.updatedAt = nowIso();
       dup.record.history.unshift(crmHistoryEntry('updated', 'Updated from green check quick import'));
+      updated += 1;
     } else {
       crmRecords.unshift(candidate);
       imported += 1;
@@ -929,7 +942,7 @@ function importQualifiedLeads(indexes){
   updateDashboardSummary();
   renderLeads();
   renderCrm();
-  showToast('Success!', imported ? imported + ' green check leads imported.' : 'Qualified leads were already in Smart CRM and were updated.');
+  showToast('Success!', imported + ' imported. ' + updated + ' already in Smart CRM and updated.');
 }
 function summaryCounts(arr){
   $('sumTotal').textContent = String(arr.length);
