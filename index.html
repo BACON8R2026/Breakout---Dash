@@ -505,6 +505,7 @@ const API = 'https://project-creator-BACON8R2026.replit.app';
 const CRM_KEY = 'bai_crm_records_master';
 const SEARCH_HISTORY_KEY = 'bai_search_history_master';
 const CURRENT_LEADS_STATE_KEY = 'bai_current_leads_state';
+const DECLINED_LEADS_KEY = 'bai_declined_leads_state';
 const LEGACY_CRM_KEYS = ['bai_crm_records_master','bai_crm_records_v4_fix','bai_crm_records_v4','bai_crm_records_v3','bai_crm_records_v2','bai_crm_records'];
 const LEGACY_HISTORY_KEYS = ['bai_search_history_master','bai_search_history_v4_fix','bai_search_history_v4','bai_search_history_v3','bai_search_history'];
 let currentView = 'home';
@@ -639,6 +640,77 @@ function loadState(){
 function saveCrm(){ localStorage.setItem(CRM_KEY, JSON.stringify(crmRecords)); }
 function saveSearchHistory(){ localStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(searchHistory)); }
 
+function normalizeExclusionEntry(input){
+  const placeId = compact(input && (input.placeId || input.id));
+  const domain = compact(input && input.domain).toLowerCase();
+  const phone = digitsOnly(input && (input.phone || input.businessPhone || input.primaryContactPhone || ''));
+  const name = compact(input && (input.name || input.businessName));
+  const city = compact(input && input.city).toLowerCase();
+  const nameCityKey = name && city ? normalizeName(name) + '|' + city : '';
+  return {
+    placeId,
+    domain,
+    phone,
+    name,
+    city,
+    nameCityKey
+  };
+}
+function loadDeclinedLeads(){
+  try {
+    const raw = localStorage.getItem(DECLINED_LEADS_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+function saveDeclinedLeads(entries){
+  try { localStorage.setItem(DECLINED_LEADS_KEY, JSON.stringify(entries)); } catch {}
+}
+function declineLead(index){
+  const lead = leads[index];
+  if (!lead) return;
+  const declined = loadDeclinedLeads();
+  const entry = normalizeExclusionEntry(lead);
+  const exists = declined.some(item =>
+    (entry.placeId && item.placeId && entry.placeId === item.placeId) ||
+    (entry.domain && item.domain && entry.domain === item.domain) ||
+    (entry.phone && item.phone && entry.phone === item.phone) ||
+    (entry.nameCityKey && item.nameCityKey && entry.nameCityKey === item.nameCityKey)
+  );
+  if (!exists) declined.unshift({ ...entry, declinedAt: nowIso() });
+  saveDeclinedLeads(declined);
+  lead.handledState = 'declined';
+  saveCurrentLeadsState();
+  renderLeads();
+  showToast('Success!', (lead.name || 'Lead') + ' declined and hidden from future searches.');
+}
+function isDeclinedLead(lead){
+  const entry = normalizeExclusionEntry(lead);
+  const declined = loadDeclinedLeads();
+  return declined.some(item =>
+    (entry.placeId && item.placeId && entry.placeId === item.placeId) ||
+    (entry.domain && item.domain && entry.domain === item.domain) ||
+    (entry.phone && item.phone && entry.phone === item.phone) ||
+    (entry.nameCityKey && item.nameCityKey && entry.nameCityKey === item.nameCityKey)
+  );
+}
+function buildSearchExclusions(){
+  const crm = Array.isArray(crmRecords) ? crmRecords.map(normalizeExclusionEntry) : [];
+  const declined = loadDeclinedLeads();
+  const merged = [];
+  const seen = new Set();
+  [...crm, ...declined].forEach(item => {
+    if (!item) return;
+    const key = item.placeId ? 'p:' + item.placeId : item.domain ? 'd:' + item.domain : item.phone ? 'ph:' + item.phone : item.nameCityKey ? 'nc:' + item.nameCityKey : '';
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    merged.push(item);
+  });
+  return merged;
+}
+
 function saveCurrentLeadsState(){
   try {
     const payload = {
@@ -771,7 +843,11 @@ function markLeadHandledStates(){
       (digitsOnly(lead.phone) && digitsOnly(r.businessPhone) && digitsOnly(lead.phone) === digitsOnly(r.businessPhone)) ||
       (normalizeName(lead.name) && normalizeName(r.businessName) && normalizeName(lead.name) === normalizeName(r.businessName) && compact(lead.city).toLowerCase() === compact(r.city).toLowerCase())
     );
-    if (existing) lead.handledState = existing.status === 'closed_lost' ? 'declined' : 'in_crm';
+    if (existing) {
+      lead.handledState = existing.status === 'closed_lost' ? 'declined' : 'in_crm';
+    } else if (isDeclinedLead(lead)) {
+      lead.handledState = 'declined';
+    }
   });
 }
 function visibleLeads(){ return handledFilterHidden ? leads.filter(l => !l.handledState) : leads.slice(); }
@@ -798,7 +874,7 @@ function buildLeadListRow(lead, realIndex){
     '<td>' + missingValue(lead.primaryContactEmail) + '</td>' +
     '<td>' + esc(lead.employees || 'Optional') + '</td>' +
     '<td>' + esc(lead.revenue || 'Optional') + '</td>' +
-    '<td><div class="crm-actions"><button class="bsm edit-strong" onclick="openEdit(' + realIndex + ')">Edit Lead</button><button class="bsm ok" onclick="importLead(' + realIndex + ')">Import</button>' + contactsLink + '</div></td>' +
+    '<td><div class="crm-actions"><button class="bsm edit-strong" onclick="openEdit(' + realIndex + ')">Edit Lead</button><button class="bsm ok" onclick="importLead(' + realIndex + ')">Import</button><button class="bsm red" onclick="declineLead(' + realIndex + ')">Decline</button>' + contactsLink + '</div></td>' +
     '</tr>';
 }
 function renderLeads(){
@@ -827,7 +903,7 @@ function renderLeads(){
         '<div class="block"><div class="block-label">Primary Contact Email</div><div class="block-value">' + esc(lead.primaryContactEmail || 'Not found') + '</div></div>' +
         '</div></div>' +
         '<div class="secondary-row"><div class="secondary-pill"><div class="block-label">Employees</div><div class="block-value">' + esc(lead.employees || 'Optional') + '</div></div><div class="secondary-pill"><div class="block-label">Revenue</div><div class="block-value">' + esc(lead.revenue || 'Optional') + '</div></div></div>' +
-        '<div class="action-row"><button class="bsm edit-strong" onclick="openEdit(' + realIndex + ')">Edit Lead</button><button class="bsm ok" onclick="importLead(' + realIndex + ')">Import</button>' + contactsLink + '</div>';
+        '<div class="action-row"><button class="bsm edit-strong" onclick="openEdit(' + realIndex + ')">Edit Lead</button><button class="bsm ok" onclick="importLead(' + realIndex + ')">Import</button><button class="bsm red" onclick="declineLead(' + realIndex + ')">Decline</button>' + contactsLink + '</div>';
       grid.appendChild(card);
     });
   } else {
@@ -956,8 +1032,8 @@ function importLead(index, forceNew = false){
   }
   crmRecords.unshift(candidate);
   saveCrm();
-  saveCurrentLeadsState();
   markLeadHandledStates();
+  saveCurrentLeadsState();
   updateDashboardSummary();
   renderLeads();
   renderCrm();
@@ -977,6 +1053,7 @@ function resolveDuplicate(mode){
     showToast('Success!', 'Imported duplicate as a new CRM record.');
   }
   saveCrm();
+  markLeadHandledStates();
   saveCurrentLeadsState();
   closeModal('duplicateModalWrap');
   pendingDuplicate = null;
@@ -1413,6 +1490,8 @@ async function runSearch(){
   if (minRating) url += '&minRating=' + encodeURIComponent(minRating);
   if (limit) url += '&limit=' + encodeURIComponent(limit);
   if (centers) url += '&centers=' + encodeURIComponent(centers);
+  const exclusions = buildSearchExclusions();
+  if (exclusions.length) url += '&excludeIds=' + encodeURIComponent(JSON.stringify(exclusions));
 
   const controller = new AbortController();
   const tid = setTimeout(() => controller.abort(), 120000);
@@ -1441,6 +1520,7 @@ async function runSearch(){
 
 loadState();
 restoreCurrentLeadsState();
+if (Array.isArray(leads) && leads.length) markLeadHandledStates();
 updateDashboardSummary();
 updateQuickFilterPills();
 if ($('handledToggleLabel')) $('handledToggleLabel').textContent = handledFilterHidden ? 'Hide imported and declined' : 'Show imported and declined';
