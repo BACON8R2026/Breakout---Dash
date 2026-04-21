@@ -174,11 +174,17 @@ a { color: inherit; text-decoration: none; }
 .summary-div { width:1px; height:32px; background: rgba(52,211,153,0.18); flex-shrink:0; }
 
 .results-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 14px; }
+.results-grid.focused-single { grid-template-columns: 1fr; }
 .station-panel.centered-mode { max-width: 1160px; margin: 0 auto; }
 .station-panel.list-mode { max-width: min(96vw, 1720px); margin: 0 auto; }
 .shell.wide-list-shell { max-width: min(96vw, 1720px); }
 .lead-card, .crm-card { background: #0f1623; border: 1px solid rgba(255,255,255,0.07); border-radius: 16px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
 .lead-card, .crm-card { min-height: 440px; }
+.crm-card.focused-detail { width: 100%; min-height: 520px; }
+.crm-card.focused-detail .card-columns { grid-template-columns: 1fr 1fr; gap: 18px; position: relative; align-items: stretch; }
+.crm-card.focused-detail .card-columns::after { content:''; position:absolute; left:50%; top:10px; bottom:10px; width:1px; background:rgba(255,255,255,0.08); transform:translateX(-50%); }
+.crm-card.focused-detail .column-stack { gap: 12px; }
+.focused-status-select { width: 100%; background: #161e30; color: #e8edf5; border: 1px solid rgba(249,115,22,0.22); border-radius: 10px; padding: 10px 12px; font: inherit; outline: none; }
 .lead-head, .crm-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
 .lead-title, .crm-title { font-family:'Syne',sans-serif; font-size:16px; font-weight:800; color:#e8edf5; line-height:1.2; }
 .lead-sub, .crm-sub { font-size:11px; color:#8fa3c0; line-height:1.45; margin-top:4px; }
@@ -1523,9 +1529,26 @@ function renderPrimaryContactPhoneAction(record){
   return '<button class="muted-btn" onclick="openPromptBuilder(\'' + record.crmId + '\',\'primary_contact_phone\')">Not found</button>';
 }
 function buildCrmMirrorCard(r){
+  const isFocused = activeCrmThumbRecordId === r.crmId;
   const contactsCount = Math.max(0, (Array.isArray(r.contacts) ? r.contacts.length : 0) - 1);
   const contactsPill = '<button class="secondary-pill secondary-pill-btn contact-pill ' + (contactsCount > 0 ? 'active' : '') + '" onclick="openContactsByRecord(\'' + r.crmId + '\')"><div class="block-label">More Contacts</div><div class="block-value">(' + contactsCount + ')</div></button>';
-  return '<div class="crm-card">' +
+  const statusBlock = isFocused
+    ? '<div class="block"><div class="block-label">Status</div><select class="focused-status-select" onchange="quickStatusUpdate(\'' + r.crmId + '\', this.value)">' +
+        '<option value="new"' + (r.status === 'new' ? ' selected' : '') + '>New</option>' +
+        '<option value="emailed"' + (r.status === 'emailed' ? ' selected' : '') + '>Emailed</option>' +
+        '<option value="called_or_texted"' + (r.status === 'called_or_texted' ? ' selected' : '') + '>Called or Texted</option>' +
+        '<option value="need_new_contact_info"' + (r.status === 'need_new_contact_info' ? ' selected' : '') + '>Need New Contact Info</option>' +
+        '<option value="replied"' + (r.status === 'replied' ? ' selected' : '') + '>Replied</option>' +
+        '<option value="interested"' + (r.status === 'interested' ? ' selected' : '') + '>Interested</option>' +
+        '<option value="follow_up_needed"' + (r.status === 'follow_up_needed' ? ' selected' : '') + '>Follow Up Needed</option>' +
+        '<option value="meeting_booked"' + (r.status === 'meeting_booked' ? ' selected' : '') + '>Meeting Booked</option>' +
+        '<option value="proposal_sent"' + (r.status === 'proposal_sent' ? ' selected' : '') + '>Proposal Sent</option>' +
+        '<option value="negotiating"' + (r.status === 'negotiating' ? ' selected' : '') + '>Negotiating</option>' +
+        '<option value="closed_won"' + (r.status === 'closed_won' ? ' selected' : '') + '>Closed Won</option>' +
+        '<option value="closed_lost"' + (r.status === 'closed_lost' ? ' selected' : '') + '>Closed Lost</option>' +
+      '</select></div>'
+    : '';
+  return '<div class="crm-card' + (isFocused ? ' focused-detail' : '') + '" id="crmCard_' + r.crmId + '">' +
     '<div class="crm-head"><div><div class="crm-title"><button class="link-btn" onclick="openCrmRecord(\'' + r.crmId + '\')">' + titleWithCheck(r.businessName, r) + '</button></div><div class="crm-sub">' + esc(r.address || [r.city, r.state].filter(Boolean).join(', ')) + '</div></div><div class="badges"></div></div>' +
     '<div class="card-columns"><div class="column-stack">' +
     '<div class="' + fieldBlockClass(r, 'industry') + '"><div class="' + fieldLabelClass(r, 'industry') + '">' + missingLabel('Industry', r.industry) + '</div><div class="block-value ' + valueClass(r, 'industry') + '">' + missingValue(r.industry) + '</div></div>' +
@@ -1533,9 +1556,12 @@ function buildCrmMirrorCard(r){
     '<div class="' + fieldBlockClass(r, 'businessPhone') + '"><div class="' + fieldLabelClass(r, 'businessPhone') + '">' + missingLabel('Business Phone', r.businessPhone) + '</div><div class="block-value ' + valueClass(r, 'businessPhone') + '">' + (r.businessPhone ? renderPhoneAction(r.businessPhone, r.crmId, 'business_phone') : '<span class="missing-value">Not found</span>') + '</div></div>' +
     '<div class="' + fieldBlockClass(r, 'companyEmail') + '"><div class="' + fieldLabelClass(r, 'companyEmail') + '">' + missingLabel('Company Email', r.companyEmail) + '</div><div class="block-value ' + valueClass(r, 'companyEmail') + '">' + (r.companyEmail ? renderEmailAction(r.companyEmail, r.crmId, 'company_email') : '<span class="field-chip-none">None</span>') + '</div></div>' +
     '</div><div class="column-stack">' +
+    statusBlock +
     '<div class="' + fieldBlockClass(r, 'primaryContactName') + '"><div class="' + fieldLabelClass(r, 'primaryContactName') + '">' + missingLabel('Primary Contact', r.primaryContactName) + '</div><div class="block-value ' + valueClass(r, 'primaryContactName') + '">' + (r.primaryContactName ? renderContactNameAction(r) : '<span class="missing-value">Not found</span>') + '</div><div class="crm-sub ' + valueClass(r, 'primaryContactTitle') + '">' + esc(r.primaryContactTitle || '') + '</div></div>' +
     '<div class="' + fieldBlockClass(r, 'primaryContactPhone') + '"><div class="' + fieldLabelClass(r, 'primaryContactPhone') + '">' + missingLabel('Primary Contact Phone', r.primaryContactPhone) + '</div><div class="block-value ' + valueClass(r, 'primaryContactPhone') + '">' + (r.primaryContactPhone ? renderPrimaryContactPhoneAction(r) : '<span class="missing-value">Not found</span>') + '</div></div>' +
     '<div class="' + fieldBlockClass(r, 'primaryContactEmail') + '"><div class="' + fieldLabelClass(r, 'primaryContactEmail') + '">' + missingLabel('Primary Contact Email', r.primaryContactEmail) + '</div><div class="block-value ' + valueClass(r, 'primaryContactEmail') + '">' + (r.primaryContactEmail ? renderPrimaryContactEmailAction(r) : '<span class="missing-value">Not found</span>') + '</div></div>' +
+    (isFocused ? '<div class="block"><div class="block-label">Lead Owner</div><div class="block-value">' + esc(r.leadOwner || 'None') + '</div></div>' : '') +
+    (isFocused ? '<div class="block"><div class="block-label">Service Interest</div><div class="block-value">' + esc(r.serviceInterest || 'None') + '</div></div>' : '') +
     '</div></div>' +
     '<div class="secondary-row">' + contactsPill + '<div class="secondary-pill"><div class="block-label">Employees</div><div class="block-value">' + esc(r.employees || 'Optional') + '</div></div><div class="secondary-pill"><div class="block-label">Revenue</div><div class="block-value">' + esc(r.revenue || 'Optional') + '</div></div></div>' +
     '<div class="action-row"><button class="bsm edit-strong" onclick="openCrmRecord(\'' + r.crmId + '\')">Edit Lead</button><button class="bsm" onclick="openContactsByRecord(\'' + r.crmId + '\')">Contacts</button><button class="bsm ai" onclick="openAiEnhancePlaceholder(' + "'crm'" + ')">AI Enhance</button>' + (r.aiLastEnhancedAt ? '<span class="ai-inline-meta">&#10003; ' + esc(formatEnhanceDate(r.aiLastEnhancedAt)) + '</span>' : '') + '</div>' +
@@ -1671,6 +1697,7 @@ function renderCrm(){
   const focusedBackRow = $('crmFocusedBackRow');
   const crmSectionWrap = document.querySelector('#viewCrm .section-wrap');
   const crmControlsRows = Array.from(document.querySelectorAll('#viewCrm .back-row')).filter(row => row.id !== 'crmFocusedBackRow');
+  const crmCardsWrap = $('crmCardsWrap');
   if (thumbStrip) thumbStrip.classList.toggle('hidden', crmView !== 'cards' || !!activeCrmThumbRecordId);
   if (focusedBackRow) focusedBackRow.classList.toggle('hidden', !activeCrmThumbRecordId);
   if (crmSectionWrap) crmSectionWrap.classList.toggle('hidden', !!activeCrmThumbRecordId);
@@ -1678,6 +1705,7 @@ function renderCrm(){
   renderCrmThumbStrip(activeCrmThumbRecordId ? crmRecords.filter(r => r.crmId !== activeCrmThumbRecordId) : records);
   $('crmListWrap').classList.toggle('hidden', crmView !== 'list' || !!activeCrmThumbRecordId);
   $('crmCardsWrap').classList.toggle('hidden', crmView !== 'cards');
+  if (crmCardsWrap) crmCardsWrap.classList.toggle('focused-single', !!activeCrmThumbRecordId);
 
   if (crmView === 'list') {
     $('crmListWrap').innerHTML = '<table class="crm-table"><thead><tr><th>Business</th><th>Industry</th><th>Website</th><th>Business Phone</th><th>Company Email</th><th>Primary Contact</th><th>Primary Contact Phone</th><th>Primary Contact Email</th><th>Employees</th><th>Revenue</th><th>Actions</th></tr></thead><tbody>' + records.map(r => '<tr>' +
