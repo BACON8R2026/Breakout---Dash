@@ -331,7 +331,7 @@ a { color: inherit; text-decoration: none; }
           <div><label class="flabel">Business Type</label><input class="inp" id="searchType" value="HVAC"></div>
           <div><label class="flabel">City</label><input class="inp" id="searchCity" value="Palm Desert CA"></div>
           <div><label class="flabel">Min Rating</label><select class="sel" id="searchRating"><option value="">Any</option><option value="4" selected>4.0+</option><option value="4.5">4.5+</option></select></div>
-          <div><label class="flabel">Max Results</label><select class="sel" id="searchLimit"><option value="10">10</option><option value="20" selected>20</option><option value="30">30</option><option value="40">40</option></select></div>
+          <div><label class="flabel">Max Results</label><select class="sel" id="searchLimit"><option value="25" selected>25</option><option value="50">50</option></select></div>
         </div>
         <div class="row2"><div><label class="flabel">Custom Cities Optional</label><input class="inp" id="searchCenters" placeholder="Palm Springs CA, La Quinta CA"></div></div>
         <button class="btn-main" id="searchBtn" onclick="runSearch()">Search for Leads</button>
@@ -1368,20 +1368,27 @@ async function runSearch(){
   if (limit) url += '&limit=' + encodeURIComponent(limit);
   if (centers) url += '&centers=' + encodeURIComponent(centers);
 
+  const controller = new AbortController();
+  const tid = setTimeout(() => controller.abort(), 120000);
+
   try {
-    const res = await fetch(url);
+    const res = await fetch(url, { signal: controller.signal });
     if (!res.ok) throw new Error('API ' + res.status);
     const data = await res.json();
     leads = Array.isArray(data.results) ? data.results.map(normalizeLead) : [];
     markLeadHandledStates();
     finishProgress(true);
     renderLeads();
-    logSearch({ at: nowIso(), type, city, minRating: minRating || 'Any', limit: Number(limit || 20), centers, count: leads.length });
+    logSearch({ at: nowIso(), type, city, minRating: minRating || 'Any', limit: Number(limit || 25), centers, count: leads.length });
   } catch (err) {
     finishProgress(false);
-    $('errorBar').textContent = 'Search failed: ' + (err && err.message ? err.message : String(err));
+    const message = err && err.name === 'AbortError'
+      ? 'Search took too long. Please try again.'
+      : 'Search failed: ' + (err && err.message ? err.message : String(err));
+    $('errorBar').textContent = message;
     $('errorBar').style.display = 'block';
   } finally {
+    clearTimeout(tid);
     $('searchBtn').disabled = false;
   }
 }
