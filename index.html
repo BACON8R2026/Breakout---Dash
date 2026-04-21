@@ -149,6 +149,7 @@ a { color: inherit; text-decoration: none; }
 .ai-badge { color:#fde68a; border-color:rgba(250,204,21,0.45); background:rgba(250,204,21,0.16); }
 .ai-enhance-meta { color:#fde68a; font-size:11px; font-weight:700; }
 .badge.ai-date-badge { color:#fde68a; border-color:rgba(253,230,138,0.35); background:rgba(253,230,138,0.08); }
+.title-check { display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; border-radius:999px; margin-left:8px; font-size:11px; font-weight:700; color:#34d399; border:1px solid rgba(52,211,153,0.35); background:rgba(52,211,153,0.08); vertical-align:middle; }
 .ai-inline-meta { display:inline-flex; align-items:center; gap:6px; color:#fde68a; font-size:11px; font-weight:700; }
 .ai-list-value { color:#fde68a; font-weight:700; }
 
@@ -878,6 +879,15 @@ function markLeadHandledStates(){
 function visibleLeads(){ return handledFilterHidden ? leads.filter(l => !l.handledState) : leads.slice(); }
 function toggleHandledResults(){ handledFilterHidden = !handledFilterHidden; $('handledToggleLabel').textContent = handledFilterHidden ? 'Hide imported and declined' : 'Show imported and declined'; saveCurrentLeadsState(); renderLeads(); }
 
+function qualifiesLeadForQuickImport(item){
+  const hasWebsite = !!compact(item && item.website);
+  const hasPhone = !!digitsOnly(item && (item.phone || item.businessPhone));
+  const hasEmail = !!compact(item && (item.companyEmail || item.primaryContactEmail));
+  return hasWebsite && hasPhone && hasEmail;
+}
+function titleWithCheck(title, item){
+  return esc(title || '') + (qualifiesLeadForQuickImport(item) ? '<span class="title-check">&#10003;</span>' : '');
+}
 function summaryCounts(arr){
   $('sumTotal').textContent = String(arr.length);
   $('sumWebsite').textContent = String(arr.filter(x => !!x.website).length);
@@ -890,7 +900,7 @@ function buildLeadListRow(lead, realIndex){
   const contactsLink = lead.contacts.length > 1 ? '<button class="bsm" onclick="openContactsFromLead(' + realIndex + ')">More Contacts</button>' : '';
   const checked = isLeadSelected(lead) ? ' checked' : '';
   return '<tr>' +
-    '<td><div class="lead-checkbox-wrap"><input type="checkbox" class="lead-checkbox"' + checked + ' onchange="toggleLeadSelection(' + realIndex + ')"><div><div style="font-weight:700">' + esc(lead.name) + '</div><div class="crm-mini">' + esc(lead.address || [lead.city, lead.state].filter(Boolean).join(', ')) + '</div></div></div></td>' +
+    '<td><div class="lead-checkbox-wrap"><input type="checkbox" class="lead-checkbox"' + checked + ' onchange="toggleLeadSelection(' + realIndex + ')"><div><div style="font-weight:700">' + titleWithCheck(lead.name, lead) + '</div><div class="crm-mini">' + esc(lead.address || [lead.city, lead.state].filter(Boolean).join(', ')) + '</div></div></div></td>' +
     '<td><span class="' + valueClass(lead, 'industry') + '">' + missingValue(lead.industry) + '</span></td>' +
     '<td><span class="' + valueClass(lead, 'website') + '">' + (lead.website ? '<a href="' + esc(lead.website) + '" target="_blank" class="link-btn">' + esc(lead.domain || lead.website) + '</a>' : '<span class="missing-value">Not found</span>') + '</span></td>' +
     '<td><span class="' + valueClass(lead, 'phone') + '">' + missingValue(lead.phone) + '</span></td>' +
@@ -919,7 +929,7 @@ function renderLeads(){
       const checked = isLeadSelected(lead) ? ' checked' : '';
       const card = document.createElement('div');
       card.className = 'lead-card';
-      card.innerHTML = '<div class="lead-head"><div><div class="lead-checkbox-wrap"><input type="checkbox" class="lead-checkbox"' + checked + ' onchange="toggleLeadSelection(' + realIndex + ')"><div><div class="lead-title">' + esc(lead.name) + '</div><div class="lead-sub">' + esc(lead.address || [lead.city, lead.state].filter(Boolean).join(', ')) + '</div></div></div></div><div class="badges">' + (lead.rating ? '<span class="badge">&#9733; ' + esc(lead.rating) + '</span>' : '') + '<span class="badge ora">Google Places</span>' + handledBadge + '</div></div>' +
+      card.innerHTML = '<div class="lead-head"><div><div class="lead-checkbox-wrap"><input type="checkbox" class="lead-checkbox"' + checked + ' onchange="toggleLeadSelection(' + realIndex + ')"><div><div class="lead-title">' + titleWithCheck(lead.name, lead) + '</div><div class="lead-sub">' + esc(lead.address || [lead.city, lead.state].filter(Boolean).join(', ')) + '</div></div></div></div><div class="badges">' + (lead.rating ? '<span class="badge">&#9733; ' + esc(lead.rating) + '</span>' : '') + '<span class="badge ora">Google Places</span>' + handledBadge + '</div></div>' +
         '<div class="card-columns"><div class="column-stack">' +
         '<div class="' + fieldBlockClass(lead, 'industry') + '"><div class="' + fieldLabelClass(lead, 'industry') + '">Industry</div><div class="block-value">' + missingValue(lead.industry) + '</div></div>' +
         '<div class="' + fieldBlockClass(lead, 'website') + '"><div class="' + fieldLabelClass(lead, 'website') + '">Website</div><div class="block-value">' + (lead.website ? '<a href="' + esc(lead.website) + '" target="_blank" style="color:#fb923c;text-decoration:none">' + esc(lead.domain || lead.website) + '</a>' : '<span class="missing-value">Not found</span>') + '</div></div>' +
@@ -1185,20 +1195,22 @@ function renderPrimaryContactPhoneAction(record){
   return '<button class="muted-btn" onclick="openPromptBuilder(\'' + record.crmId + '\',\'primary_contact_phone\')">Not found</button>';
 }
 function buildCrmMirrorCard(r){
+  const aiBadge = r.aiLastEnhancedAt ? '<span class="badge ai-date-badge">&#10003; ' + esc(formatEnhanceDate(r.aiLastEnhancedAt)) + '</span>' : '';
   return '<div class="crm-card">' +
-    '<div class="crm-head"><div><div class="crm-title"><button class="link-btn" onclick="openCrmRecord(\'' + r.crmId + '\')">' + esc(r.businessName) + '</button></div><div class="crm-sub">' + esc(r.address || [r.city, r.state].filter(Boolean).join(', ')) + '</div></div></div>' +
+    '<div class="crm-head"><div><div class="crm-title"><button class="link-btn" onclick="openCrmRecord(\'' + r.crmId + '\')">' + titleWithCheck(r.businessName, r) + '</button></div><div class="crm-sub">' + esc(r.address || [r.city, r.state].filter(Boolean).join(', ')) + '</div></div><div class="badges"><span class="badge ora">Smart CRM</span>' + aiBadge + '</div></div>' +
     '<div class="card-columns"><div class="column-stack">' +
-    '<div class="block"><div class="block-label">Industry</div><div class="block-value">' + esc(r.industry || 'Not found') + '</div></div>' +
-    '<div class="block"><div class="block-label">Website</div><div class="block-value">' + (renderWebsiteLink(r.website) || '<button class="muted-btn" onclick="openPromptBuilder(\'' + r.crmId + '\', \'website\')">Not found</button>') + '</div></div>' +
-    '<div class="block"><div class="block-label">Business Phone</div><div class="block-value">' + renderPhoneAction(r.businessPhone, r.crmId, 'business_phone') + '</div></div>' +
-    '<div class="block"><div class="block-label">Company Email</div><div class="block-value">' + renderEmailAction(r.companyEmail, r.crmId, 'company_email') + '</div></div>' +
+    '<div class="block"><div class="block-label">' + missingLabel('Industry', r.industry) + '</div><div class="block-value">' + missingValue(r.industry) + '</div></div>' +
+    '<div class="block"><div class="block-label">' + missingLabel('Website', r.website) + '</div><div class="block-value">' + (r.website ? renderWebsiteLink(r.website) : '<span class="missing-value">Not found</span>') + '</div></div>' +
+    '<div class="block"><div class="block-label">' + missingLabel('Business Phone', r.businessPhone) + '</div><div class="block-value">' + (r.businessPhone ? renderPhoneAction(r.businessPhone, r.crmId, 'business_phone') : '<span class="missing-value">Not found</span>') + '</div></div>' +
+    '<div class="block"><div class="block-label">' + missingLabel('Company Email', r.companyEmail) + '</div><div class="block-value">' + (r.companyEmail ? renderEmailAction(r.companyEmail, r.crmId, 'company_email') : '<span class="missing-value">Not found</span>') + '</div></div>' +
     '</div><div class="column-stack">' +
-    '<div class="block"><div class="block-label">Primary Contact</div><div class="block-value">' + renderContactNameAction(r) + '</div><div class="crm-sub">' + esc(r.primaryContactTitle || '') + '</div></div>' +
-    '<div class="block"><div class="block-label">Primary Contact Phone</div><div class="block-value">' + renderPrimaryContactPhoneAction(r) + '</div></div>' +
-    '<div class="block"><div class="block-label">Primary Contact Email</div><div class="block-value">' + renderPrimaryContactEmailAction(r) + '</div></div>' +
+    '<div class="block"><div class="block-label">' + missingLabel('Primary Contact', r.primaryContactName) + '</div><div class="block-value">' + (r.primaryContactName ? renderContactNameAction(r) : '<span class="missing-value">Not found</span>') + '</div><div class="crm-sub">' + esc(r.primaryContactTitle || '') + '</div></div>' +
+    '<div class="block"><div class="block-label">' + missingLabel('Primary Contact Phone', r.primaryContactPhone) + '</div><div class="block-value">' + (r.primaryContactPhone ? renderPrimaryContactPhoneAction(r) : '<span class="missing-value">Not found</span>') + '</div></div>' +
+    '<div class="block"><div class="block-label">' + missingLabel('Primary Contact Email', r.primaryContactEmail) + '</div><div class="block-value">' + (r.primaryContactEmail ? renderPrimaryContactEmailAction(r) : '<span class="missing-value">Not found</span>') + '</div></div>' +
     '</div></div>' +
     '<div class="secondary-row"><div class="secondary-pill"><div class="block-label">Employees</div><div class="block-value">' + esc(r.employees || 'Optional') + '</div></div><div class="secondary-pill"><div class="block-label">Revenue</div><div class="block-value">' + esc(r.revenue || 'Optional') + '</div></div></div>' +
-    '<div class="action-row"><button class="bsm" onclick="openContactsByRecord(\'' + r.crmId + '\')">Contacts</button><button class="bsm ai" onclick="openAiEnhancePlaceholder(' + "'crm'" + ')">AI</button></div>' +
+    '<div class="action-row"><button class="bsm edit-strong" onclick="openCrmRecord(\'' + r.crmId + '\')">Edit Lead</button><button class="bsm" onclick="openContactsByRecord(\'' + r.crmId + '\')">Contacts</button><button class="bsm ora" onclick="openAiEnhancePlaceholder(' + "'crm'" + ')">AI</button></div>' +
+    (r.aiLastEnhancedAt ? '<div class="mini-enhance-note">AI enhanced ' + esc(formatEnhanceDate(r.aiLastEnhancedAt)) + '</div>' : '') +
     '</div>';
 }
 function setCrmView(next){ crmView = next; updateShellLayout(); renderCrm(); }
@@ -1240,7 +1252,7 @@ function renderCrm(){
 
   if (crmView === 'list') {
     $('crmListWrap').innerHTML = '<table class="crm-table"><thead><tr><th>Business</th><th>Industry</th><th>Website</th><th>Business Phone</th><th>Company Email</th><th>Primary Contact</th><th>Primary Contact Phone</th><th>Primary Contact Email</th><th>Employees</th><th>Revenue</th><th>Actions</th></tr></thead><tbody>' + records.map(r => '<tr>' +
-      '<td><button class="link-btn" onclick="openCrmRecord(\'' + r.crmId + '\')">' + esc(r.businessName) + '</button><div class="crm-mini">' + esc(r.address || [r.city, r.state].filter(Boolean).join(', ')) + '</div></td>' +
+      '<td><button class="link-btn" onclick="openCrmRecord(\'' + r.crmId + '\')">' + titleWithCheck(r.businessName, r) + '</button><div class="crm-mini">' + esc(r.address || [r.city, r.state].filter(Boolean).join(', ')) + '</div></td>' +
       '<td>' + esc(r.industry || 'Not found') + '</td>' +
       '<td>' + (renderWebsiteLink(r.website) || '<button class="muted-btn" onclick="openPromptBuilder(\'' + r.crmId + '\', \'website\')">Not found</button>') + '</td>' +
       '<td>' + renderPhoneAction(r.businessPhone, r.crmId, 'business_phone') + '</td>' +
