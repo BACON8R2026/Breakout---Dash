@@ -155,8 +155,8 @@ a { color: inherit; text-decoration: none; }
 .scrape-field-highlight { border-color: rgba(245,158,11,0.5); background: rgba(245,158,11,0.16); }
 .scrape-field-highlight .block-value, .scrape-field-highlight .block-value a, .scrape-field-highlight .crm-mini { color: #fbbf24 !important; font-weight: 700; }
 .scrape-label-highlight { color: #fbbf24 !important; font-weight: 700; }
-.field-chip-link { display:inline-flex; align-items:center; gap:6px; color:#fb923c; font-weight:700; text-decoration:none; }
-.field-chip-link:hover { text-decoration:underline; }
+.field-chip-link { display:inline-flex; align-items:center; gap:6px; color:#fb923c; font-weight:700; text-decoration:none; padding:4px 8px; border-radius:999px; border:1px solid rgba(249,115,22,0.22); background:rgba(249,115,22,0.08); }
+.field-chip-link:hover { text-decoration:none; border-color:rgba(249,115,22,0.38); background:rgba(249,115,22,0.14); }
 .field-chip-none { color:#fca5a5; font-weight:600; }
 
 .progress-wrap { display:none; margin-bottom: 14px; background:#0f1623; border:1px solid rgba(249,115,22,0.2); border-radius: 14px; padding: 14px; }
@@ -1477,10 +1477,10 @@ function renderWebsiteLink(url){
   return url ? '<a href="' + esc(url) + '" target="_blank" class="link-btn">' + esc(url.replace(/^https?:\/\//,'').replace(/\/$/,'')) + '</a>' : '';
 }
 function renderWebsiteChip(url){
-  return url ? '<a href="' + esc(url) + '" target="_blank" class="field-chip-link">Website &#8599;</a>' : '<span class="field-chip-none">None</span>';
+  return url ? '<a href="' + esc(url) + '" target="_blank" class="field-chip-link">&#127760; Website</a>' : '<span class="field-chip-none">None</span>';
 }
 function renderEmailChip(email){
-  return email ? '<span class="field-chip-link">Email</span>' : '<span class="field-chip-none">None</span>';
+  return email ? '<span class="field-chip-link">&#9993;&#65039; Email</span>' : '<span class="field-chip-none">None</span>';
 }
 function renderEmailAction(email, crmId, missingField){
   if (email) {
@@ -1611,9 +1611,9 @@ function renderCrmThumbStrip(records){
   wrap.innerHTML = records.map(r => '<button class="crm-thumb-card" onclick="openCrmThumbnail(\'' + r.crmId + '\')">' +
     '<div class="crm-thumb-name">' + esc(r.businessName || '') + '</div>' +
     '<div class="crm-thumb-line">' + esc([r.city, r.state].filter(Boolean).join(', ')) + '</div>' +
-    '<div class="crm-thumb-line">' + (r.website ? 'Website' : 'None') + '</div>' +
+    '<div class="crm-thumb-line">' + (r.website ? '&#127760; Website' : 'None') + '</div>' +
     '<div class="crm-thumb-line">' + esc(r.businessPhone || 'No phone') + '</div>' +
-    '<div class="crm-thumb-line">' + (r.companyEmail ? 'Email' : 'None') + '</div>' +
+    '<div class="crm-thumb-line">' + (r.companyEmail ? '&#9993;&#65039; Email' : 'None') + '</div>' +
     '<div class="' + crmStatusBadgeClass(r.status) + ' crm-thumb-status">' + esc(statusLabel(r.status || 'new')) + '</div>' +
     '</button>').join('');
 }
@@ -1621,6 +1621,8 @@ function renderCrm(){
   const records = filteredCrmRecords();
   updateQuickFilterPills();
   updateCrmQuickFilterCounts();
+  const thumbStrip = $('crmThumbStrip');
+  if (thumbStrip) thumbStrip.classList.toggle('hidden', crmView !== 'cards');
   renderCrmThumbStrip(records);
   $('crmListWrap').classList.toggle('hidden', crmView !== 'list');
   $('crmCardsWrap').classList.toggle('hidden', crmView !== 'cards');
