@@ -136,6 +136,10 @@ a { color: inherit; text-decoration: none; }
 .muted-btn { background: transparent; border: none; color: #8fa3c0; font: inherit; cursor: pointer; padding: 0; }
 .muted-btn:hover { color: #e8edf5; text-decoration: underline; }
 
+.missing-indicator { color: #fca5a5; font-weight: 700; margin-left: 4px; }
+.missing-value { color: #fca5a5; font-weight: 600; }
+.bsm.edit-strong { border-color: rgba(249,115,22,0.35); color: #fb923c; background: rgba(249,115,22,0.08); }
+
 .progress-wrap { display:none; margin-bottom: 14px; background:#0f1623; border:1px solid rgba(249,115,22,0.2); border-radius: 14px; padding: 14px; }
 .progress-head { display:flex; justify-content:space-between; gap:12px; font-size:12px; color:#fb923c; margin-bottom:8px; }
 .progress-sub { font-size:11px; color:#8fa3c0; margin-bottom:10px; }
@@ -500,6 +504,7 @@ a { color: inherit; text-decoration: none; }
 const API = 'https://project-creator-BACON8R2026.replit.app';
 const CRM_KEY = 'bai_crm_records_master';
 const SEARCH_HISTORY_KEY = 'bai_search_history_master';
+const CURRENT_LEADS_STATE_KEY = 'bai_current_leads_state';
 const LEGACY_CRM_KEYS = ['bai_crm_records_master','bai_crm_records_v4_fix','bai_crm_records_v4','bai_crm_records_v3','bai_crm_records_v2','bai_crm_records'];
 const LEGACY_HISTORY_KEYS = ['bai_search_history_master','bai_search_history_v4_fix','bai_search_history_v4','bai_search_history_v3','bai_search_history'];
 let currentView = 'home';
@@ -634,6 +639,43 @@ function loadState(){
 function saveCrm(){ localStorage.setItem(CRM_KEY, JSON.stringify(crmRecords)); }
 function saveSearchHistory(){ localStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(searchHistory)); }
 
+function saveCurrentLeadsState(){
+  try {
+    const payload = {
+      leads,
+      handledFilterHidden,
+      leadView,
+      searchType: $('searchType') ? $('searchType').value : '',
+      searchCity: $('searchCity') ? $('searchCity').value : '',
+      searchRating: $('searchRating') ? $('searchRating').value : '',
+      searchLimit: $('searchLimit') ? $('searchLimit').value : '',
+      searchCenters: $('searchCenters') ? $('searchCenters').value : ''
+    };
+    localStorage.setItem(CURRENT_LEADS_STATE_KEY, JSON.stringify(payload));
+  } catch {}
+}
+function restoreCurrentLeadsState(){
+  try {
+    const raw = localStorage.getItem(CURRENT_LEADS_STATE_KEY);
+    if (!raw) return;
+    const payload = JSON.parse(raw);
+    if ($('searchType') && typeof payload.searchType === 'string') $('searchType').value = payload.searchType;
+    if ($('searchCity') && typeof payload.searchCity === 'string') $('searchCity').value = payload.searchCity;
+    if ($('searchRating') && typeof payload.searchRating === 'string') $('searchRating').value = payload.searchRating;
+    if ($('searchLimit') && typeof payload.searchLimit === 'string') $('searchLimit').value = payload.searchLimit;
+    if ($('searchCenters') && typeof payload.searchCenters === 'string') $('searchCenters').value = payload.searchCenters;
+    if (Array.isArray(payload.leads)) leads = payload.leads;
+    if (typeof payload.handledFilterHidden === 'boolean') handledFilterHidden = payload.handledFilterHidden;
+    if (payload.leadView === 'list' || payload.leadView === 'cards') leadView = payload.leadView;
+  } catch {}
+}
+function missingLabel(label, value){
+  return value ? label : label + '<span class="missing-indicator">*</span>';
+}
+function missingValue(value){
+  return value ? esc(value) : '<span class="missing-value">Not found</span>';
+}
+
 function updateShellLayout(){
   const shell = document.querySelector('.shell');
   const leadsPanel = $('leadsStationPanel');
@@ -733,7 +775,7 @@ function markLeadHandledStates(){
   });
 }
 function visibleLeads(){ return handledFilterHidden ? leads.filter(l => !l.handledState) : leads.slice(); }
-function toggleHandledResults(){ handledFilterHidden = !handledFilterHidden; $('handledToggleLabel').textContent = handledFilterHidden ? 'Hide imported and declined' : 'Show imported and declined'; renderLeads(); }
+function toggleHandledResults(){ handledFilterHidden = !handledFilterHidden; $('handledToggleLabel').textContent = handledFilterHidden ? 'Hide imported and declined' : 'Show imported and declined'; saveCurrentLeadsState(); renderLeads(); }
 
 function summaryCounts(arr){
   $('sumTotal').textContent = String(arr.length);
@@ -747,16 +789,16 @@ function buildLeadListRow(lead, realIndex){
   const contactsLink = lead.contacts.length > 1 ? '<button class="bsm" onclick="openContactsFromLead(' + realIndex + ')">More Contacts</button>' : '';
   return '<tr>' +
     '<td><div style="font-weight:700">' + esc(lead.name) + '</div><div class="crm-mini">' + esc(lead.address || [lead.city, lead.state].filter(Boolean).join(', ')) + '</div></td>' +
-    '<td>' + esc(lead.industry || 'Not found') + '</td>' +
-    '<td>' + (lead.website ? '<a href="' + esc(lead.website) + '" target="_blank" class="link-btn">' + esc(lead.domain || lead.website) + '</a>' : 'Not found') + '</td>' +
-    '<td>' + esc(lead.phone || 'Not found') + '</td>' +
-    '<td>' + esc(lead.companyEmail || 'Not found') + '</td>' +
-    '<td><div>' + esc(lead.primaryContactName || 'Not found') + '</div><div class="crm-mini">' + esc(lead.primaryContactTitle || '') + '</div></td>' +
-    '<td>' + esc(lead.primaryContactPhone || 'Not found') + '</td>' +
-    '<td>' + esc(lead.primaryContactEmail || 'Not found') + '</td>' +
+    '<td>' + missingValue(lead.industry) + '</td>' +
+    '<td>' + (lead.website ? '<a href="' + esc(lead.website) + '" target="_blank" class="link-btn">' + esc(lead.domain || lead.website) + '</a>' : '<span class="missing-value">Not found</span>') + '</td>' +
+    '<td>' + missingValue(lead.phone) + '</td>' +
+    '<td>' + missingValue(lead.companyEmail) + '</td>' +
+    '<td><div>' + missingValue(lead.primaryContactName) + '</div><div class="crm-mini">' + esc(lead.primaryContactTitle || '') + '</div></td>' +
+    '<td>' + missingValue(lead.primaryContactPhone) + '</td>' +
+    '<td>' + missingValue(lead.primaryContactEmail) + '</td>' +
     '<td>' + esc(lead.employees || 'Optional') + '</td>' +
     '<td>' + esc(lead.revenue || 'Optional') + '</td>' +
-    '<td><div class="crm-actions"><button class="bsm" onclick="openEdit(' + realIndex + ')">Edit</button><button class="bsm ok" onclick="importLead(' + realIndex + ')">Import</button>' + contactsLink + '</div></td>' +
+    '<td><div class="crm-actions"><button class="bsm edit-strong" onclick="openEdit(' + realIndex + ')">Edit Lead</button><button class="bsm ok" onclick="importLead(' + realIndex + ')">Import</button>' + contactsLink + '</div></td>' +
     '</tr>';
 }
 function renderLeads(){
@@ -785,7 +827,7 @@ function renderLeads(){
         '<div class="block"><div class="block-label">Primary Contact Email</div><div class="block-value">' + esc(lead.primaryContactEmail || 'Not found') + '</div></div>' +
         '</div></div>' +
         '<div class="secondary-row"><div class="secondary-pill"><div class="block-label">Employees</div><div class="block-value">' + esc(lead.employees || 'Optional') + '</div></div><div class="secondary-pill"><div class="block-label">Revenue</div><div class="block-value">' + esc(lead.revenue || 'Optional') + '</div></div></div>' +
-        '<div class="action-row"><button class="bsm" onclick="openEdit(' + realIndex + ')">Edit</button><button class="bsm ok" onclick="importLead(' + realIndex + ')">Import</button>' + contactsLink + '</div>';
+        '<div class="action-row"><button class="bsm edit-strong" onclick="openEdit(' + realIndex + ')">Edit Lead</button><button class="bsm ok" onclick="importLead(' + realIndex + ')">Import</button>' + contactsLink + '</div>';
       grid.appendChild(card);
     });
   } else {
@@ -793,6 +835,7 @@ function renderLeads(){
   }
   summaryCounts(shown);
   updateDashboardSummary();
+  saveCurrentLeadsState();
 }
 
 function buildMarketingCard(module){
@@ -841,6 +884,7 @@ function saveEdit(importAfter){
   const lead = leads[activeEditIndex];
   ['name','industry','address','phone','website','companyEmail','primaryContactName','primaryContactTitle','primaryContactEmail','primaryContactPhone','employees','revenue'].forEach(key => { lead[key] = compact($('edit_' + key).value); });
   closeModal('editModalWrap');
+  saveCurrentLeadsState();
   renderLeads();
   if (importAfter) importLead(activeEditIndex);
 }
@@ -912,6 +956,7 @@ function importLead(index, forceNew = false){
   }
   crmRecords.unshift(candidate);
   saveCrm();
+  saveCurrentLeadsState();
   markLeadHandledStates();
   updateDashboardSummary();
   renderLeads();
@@ -932,6 +977,7 @@ function resolveDuplicate(mode){
     showToast('Success!', 'Imported duplicate as a new CRM record.');
   }
   saveCrm();
+  saveCurrentLeadsState();
   closeModal('duplicateModalWrap');
   pendingDuplicate = null;
   markLeadHandledStates();
@@ -1394,8 +1440,10 @@ async function runSearch(){
 }
 
 loadState();
+restoreCurrentLeadsState();
 updateDashboardSummary();
 updateQuickFilterPills();
+if ($('handledToggleLabel')) $('handledToggleLabel').textContent = handledFilterHidden ? 'Hide imported and declined' : 'Show imported and declined';
 showView('home');
 </script>
 </body>
