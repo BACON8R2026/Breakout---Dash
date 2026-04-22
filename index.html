@@ -584,7 +584,6 @@ const CRM_KEY = 'bai_crm_records_master';
 const SEARCH_HISTORY_KEY = 'bai_search_history_master';
 const CURRENT_LEADS_STATE_KEY = 'bai_current_leads_state';
 const DECLINED_LEADS_KEY = 'bai_declined_leads_state';
-const CURRENT_VIEW_KEY = 'bai_current_view_state';
 const LEGACY_CRM_KEYS = ['bai_crm_records_master','bai_crm_records_v4_fix','bai_crm_records_v4','bai_crm_records_v3','bai_crm_records_v2','bai_crm_records'];
 const LEGACY_HISTORY_KEYS = ['bai_search_history_master','bai_search_history_v4_fix','bai_search_history_v4','bai_search_history_v3','bai_search_history'];
 let currentView = 'home';
@@ -891,7 +890,6 @@ function updateShellLayout(){
 }
 function showView(view){
   currentView = view;
-  try { localStorage.setItem(CURRENT_VIEW_KEY, currentView || 'home'); } catch {}
   $('viewHome').classList.toggle('hidden', view !== 'home');
   $('viewLeads').classList.toggle('hidden', view !== 'leads');
   $('viewCrm').classList.toggle('hidden', view !== 'crm');
@@ -1719,17 +1717,23 @@ function renderCrm(){
   const crmSectionWrap = document.querySelector('#viewCrm .section-wrap');
   const crmControlsRows = Array.from(document.querySelectorAll('#viewCrm .back-row')).filter(row => row.id !== 'crmFocusedBackRow');
   const crmCardsWrap = $('crmCardsWrap');
-  if (thumbStrip) thumbStrip.classList.toggle('hidden', crmView !== 'cards' || !!activeCrmThumbRecordId);
-  if (focusedBackRow) focusedBackRow.classList.toggle('hidden', !activeCrmThumbRecordId);
-  if (crmSectionWrap) crmSectionWrap.classList.toggle('hidden', !!activeCrmThumbRecordId);
-  crmControlsRows.forEach(row => row.classList.toggle('hidden', !!activeCrmThumbRecordId));
-  renderCrmThumbStrip(activeCrmThumbRecordId ? crmRecords.filter(r => r.crmId !== activeCrmThumbRecordId) : records);
-  $('crmListWrap').classList.toggle('hidden', crmView !== 'list' || !!activeCrmThumbRecordId);
-  $('crmCardsWrap').classList.toggle('hidden', crmView !== 'cards');
-  if (crmCardsWrap) crmCardsWrap.classList.toggle('focused-single', !!activeCrmThumbRecordId);
+  const crmListWrap = $('crmListWrap');
+  const isFocused = !!activeCrmThumbRecordId;
+
+  if (thumbStrip) thumbStrip.classList.toggle('hidden', crmView !== 'cards' || isFocused);
+  if (focusedBackRow) focusedBackRow.classList.toggle('hidden', !isFocused);
+  if (crmSectionWrap) crmSectionWrap.classList.toggle('hidden', isFocused);
+  crmControlsRows.forEach(row => row.classList.toggle('hidden', isFocused));
+  renderCrmThumbStrip(isFocused ? crmRecords.filter(r => r.crmId !== activeCrmThumbRecordId) : records);
+
+  if (crmListWrap) crmListWrap.classList.toggle('hidden', crmView !== 'list' || isFocused);
+  if (crmCardsWrap) {
+    crmCardsWrap.classList.toggle('hidden', crmView !== 'cards' || !isFocused);
+    crmCardsWrap.classList.toggle('focused-single', isFocused);
+  }
 
   if (crmView === 'list') {
-    $('crmListWrap').innerHTML = '<table class="crm-table"><thead><tr><th>Business</th><th>Industry</th><th>Website</th><th>Business Phone</th><th>Company Email</th><th>Primary Contact</th><th>Primary Contact Phone</th><th>Primary Contact Email</th><th>Employees</th><th>Revenue</th><th>Actions</th></tr></thead><tbody>' + records.map(r => '<tr>' +
+    crmListWrap.innerHTML = '<table class="crm-table"><thead><tr><th>Business</th><th>Industry</th><th>Website</th><th>Business Phone</th><th>Company Email</th><th>Primary Contact</th><th>Primary Contact Phone</th><th>Primary Contact Email</th><th>Employees</th><th>Revenue</th><th>Actions</th></tr></thead><tbody>' + records.map(r => '<tr>' +
       '<td><button class="link-btn" onclick="openCrmRecord(\'' + r.crmId + '\')">' + titleWithCheck(r.businessName, r) + '</button><div class="crm-mini">' + esc(r.address || [r.city, r.state].filter(Boolean).join(', ')) + '</div></td>' +
       '<td>' + esc(r.industry || 'Not found') + '</td>' +
       '<td>' + renderWebsiteChip(r.website) + '</td>' +
@@ -1742,8 +1746,10 @@ function renderCrm(){
       '<td>' + esc(r.revenue || 'Optional') + '</td>' +
       '<td><div class="crm-actions"><button class="bsm edit-strong" onclick="openCrmRecord(\'' + r.crmId + '\')">Edit Lead</button><button class="bsm" onclick="openContactsByRecord(\'' + r.crmId + '\')">Contacts</button></div></td>' +
       '</tr>').join('') + '</tbody></table>';
-  } else {
-    $('crmCardsWrap').innerHTML = records.map(r => buildCrmMirrorCard(r)).join('');
+  } else if (isFocused) {
+    crmCardsWrap.innerHTML = records.map(r => buildCrmMirrorCard(r)).join('');
+  } else if (crmCardsWrap) {
+    crmCardsWrap.innerHTML = '';
   }
   updateDashboardSummary();
 }
@@ -2102,12 +2108,7 @@ updateDashboardSummary();
 updateQuickFilterPills();
 updateCrmQuickFilterCounts();
 updateHandledToggleButton();
-let initialView = 'home';
-try {
-  const savedView = localStorage.getItem(CURRENT_VIEW_KEY);
-  if (savedView === 'home' || savedView === 'leads' || savedView === 'crm' || savedView === 'marketing') initialView = savedView;
-} catch {}
-showView(initialView);
+showView('home');
 </script>
 </body>
 </html>
