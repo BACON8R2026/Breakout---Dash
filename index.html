@@ -584,6 +584,7 @@ const CRM_KEY = 'bai_crm_records_master';
 const SEARCH_HISTORY_KEY = 'bai_search_history_master';
 const CURRENT_LEADS_STATE_KEY = 'bai_current_leads_state';
 const DECLINED_LEADS_KEY = 'bai_declined_leads_state';
+const CURRENT_VIEW_KEY = 'bai_current_view_state';
 const LEGACY_CRM_KEYS = ['bai_crm_records_master','bai_crm_records_v4_fix','bai_crm_records_v4','bai_crm_records_v3','bai_crm_records_v2','bai_crm_records'];
 const LEGACY_HISTORY_KEYS = ['bai_search_history_master','bai_search_history_v4_fix','bai_search_history_v4','bai_search_history_v3','bai_search_history'];
 let currentView = 'home';
@@ -890,6 +891,7 @@ function updateShellLayout(){
 }
 function showView(view){
   currentView = view;
+  try { localStorage.setItem(CURRENT_VIEW_KEY, currentView || 'home'); } catch {}
   $('viewHome').classList.toggle('hidden', view !== 'home');
   $('viewLeads').classList.toggle('hidden', view !== 'leads');
   $('viewCrm').classList.toggle('hidden', view !== 'crm');
@@ -2100,7 +2102,12 @@ updateDashboardSummary();
 updateQuickFilterPills();
 updateCrmQuickFilterCounts();
 updateHandledToggleButton();
-showView('home');
+let initialView = 'home';
+try {
+  const savedView = localStorage.getItem(CURRENT_VIEW_KEY);
+  if (savedView === 'home' || savedView === 'leads' || savedView === 'crm' || savedView === 'marketing') initialView = savedView;
+} catch {}
+showView(initialView);
 </script>
 </body>
 </html>
